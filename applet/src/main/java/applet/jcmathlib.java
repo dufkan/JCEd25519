@@ -810,6 +810,7 @@ public class jcmathlib {
         public byte[] b = null;
         public byte[] G = null;
         public byte[] r = null;
+        public short k = 1;
 
         public Bignat pBN;
         public Bignat aBN;
@@ -830,8 +831,9 @@ public class jcmathlib {
          * @param b_arr array with b
          * @param G_arr array with base point G
          * @param r_arr array with r
+         * @param k short with k
          */
-        public ECCurve(boolean bCopyArgs, byte[] p_arr, byte[] a_arr, byte[] b_arr, byte[] G_arr, byte[] r_arr) {
+        public ECCurve(boolean bCopyArgs, byte[] p_arr, byte[] a_arr, byte[] b_arr, byte[] G_arr, byte[] r_arr, short k) {
             //ECCurve_initialize(p_arr, a_arr, b_arr, G_arr, r_arr);
             this.KEY_LENGTH = (short) (p_arr.length * 8);
             this.POINT_SIZE = (short) G_arr.length;
@@ -859,6 +861,7 @@ public class jcmathlib {
                 this.G = G_arr;
                 this.r = r_arr;
             }
+            this.k = k;
 
             // We will not modify values of p/a/b during the lifetime of curve => allocate helper bignats directly from the array
             // Additionally, these Bignats will be only read from so Bignat_Helper can be null (saving need to pass as argument to ECCurve)
@@ -913,7 +916,7 @@ public class jcmathlib {
             privKey.setB(b, (short) 0, (short) b.length);
             privKey.setG(G, (short) 0, (short) G.length);
             privKey.setR(r, (short) 0, (short) r.length);
-            privKey.setK((short) 1);
+            privKey.setK(k);
             PM.check(PM.TRAP_ECCURVE_NEWKEYPAIR_4);
 
             pubKey.setFieldFP(p, (short) 0, (short) p.length);
@@ -921,7 +924,7 @@ public class jcmathlib {
             pubKey.setB(b, (short) 0, (short) b.length);
             pubKey.setG(G, (short) 0, (short) G.length);
             pubKey.setR(r, (short) 0, (short) r.length);
-            pubKey.setK((short) 1);
+            pubKey.setK(k);
             PM.check(PM.TRAP_ECCURVE_NEWKEYPAIR_5);
 
             existingKeyPair.genKeyPair();
@@ -930,48 +933,6 @@ public class jcmathlib {
 
             return existingKeyPair;
         }
-
-        public KeyPair newKeyPair_legacy(KeyPair existingKeyPair) {
-            PM.check(PM.TRAP_ECCURVE_NEWKEYPAIR_1);
-            ECPrivateKey privKey;
-            ECPublicKey pubKey;
-            if (existingKeyPair == null) {
-                // We need to create required objects
-                privKey = (ECPrivateKey)KeyBuilder.buildKey(KeyBuilder.TYPE_EC_FP_PRIVATE, KEY_LENGTH, false);
-                PM.check(PM.TRAP_ECCURVE_NEWKEYPAIR_2);
-                pubKey = (ECPublicKey)KeyBuilder.buildKey(KeyBuilder.TYPE_EC_FP_PUBLIC, KEY_LENGTH, false);
-                PM.check(PM.TRAP_ECCURVE_NEWKEYPAIR_3);
-            }
-            else {
-                // Obtain from object
-                privKey = (ECPrivateKey) existingKeyPair.getPrivate();
-                pubKey = (ECPublicKey) existingKeyPair.getPublic();
-            }
-            // Set required values
-            privKey.setFieldFP(p, (short) 0, (short) p.length);
-            privKey.setA(a, (short) 0, (short) a.length);
-            privKey.setB(b, (short) 0, (short) b.length);
-            privKey.setG(G, (short) 0, (short) G.length);
-            privKey.setR(r, (short) 0, (short) r.length);
-            PM.check(PM.TRAP_ECCURVE_NEWKEYPAIR_4);
-
-            pubKey.setFieldFP(p, (short) 0, (short) p.length);
-            pubKey.setA(a, (short) 0, (short) a.length);
-            pubKey.setB(b, (short) 0, (short) b.length);
-            pubKey.setG(G, (short) 0, (short) G.length);
-            pubKey.setR(r, (short) 0, (short) r.length);
-            PM.check(PM.TRAP_ECCURVE_NEWKEYPAIR_5);
-
-            if (existingKeyPair == null) { // Allocate if not supplied
-                existingKeyPair = new KeyPair(pubKey, privKey);
-            }
-            PM.check(PM.TRAP_ECCURVE_NEWKEYPAIR_6);
-            existingKeyPair.genKeyPair();
-            PM.check(PM.TRAP_ECCURVE_NEWKEYPAIR_7);
-
-            return existingKeyPair;
-        }
-
 
         /**
          * Converts provided Bignat into temporary EC private key object. No new
@@ -1829,6 +1790,8 @@ public class jcmathlib {
         public final static short KEY_LENGTH = 256;
         public final static short POINT_SIZE = 65;
         public final static short COORD_SIZE = 32;
+
+        public final static short k = 8;
 
         public final static byte[] p = {
                 (byte) 0x7f, (byte) 0xff, (byte) 0xff, (byte) 0xff,
@@ -4317,19 +4280,19 @@ public class jcmathlib {
 
             // Pre-allocate test objects (no new allocation for every tested operation)
             if (bTEST_256b_CURVE) {
-                m_testCurve = new ECCurve(false, SecP256r1.p, SecP256r1.a, SecP256r1.b, SecP256r1.G, SecP256r1.r);
+                m_testCurve = new ECCurve(false, SecP256r1.p, SecP256r1.a, SecP256r1.b, SecP256r1.G, SecP256r1.r, (short) 1);
                 m_memoryInfoOffset = snapshotAvailableMemory((short) 3, m_memoryInfo, m_memoryInfoOffset);
                 // m_testCurveCustom and m_testPointCustom will have G occasionally changed so we need separate ECCurve
                 m_customG = new byte[(short) SecP256r1.G.length];
                 Util.arrayCopyNonAtomic(SecP256r1.G, (short) 0, m_customG, (short) 0, (short) SecP256r1.G.length);
-                m_testCurveCustom = new ECCurve(false, SecP256r1.p, SecP256r1.a, SecP256r1.b, m_customG, SecP256r1.r);
+                m_testCurveCustom = new ECCurve(false, SecP256r1.p, SecP256r1.a, SecP256r1.b, m_customG, SecP256r1.r, (short) 1);
             }
             if (bTEST_512b_CURVE) {
-                m_testCurve = new ECCurve(false, P512r1.p, P512r1.a, P512r1.b, P512r1.G, P512r1.r);
+                m_testCurve = new ECCurve(false, P512r1.p, P512r1.a, P512r1.b, P512r1.G, P512r1.r, (short) 1);
                 // m_testCurveCustom and m_testPointCustom will have G occasionally changed so we need separate ECCurve
                 m_customG = new byte[(short) P512r1.G.length];
                 Util.arrayCopyNonAtomic(P512r1.G, (short) 0, m_customG, (short) 0, (short) P512r1.G.length);
-                m_testCurveCustom = new ECCurve(false, P512r1.p, P512r1.a, P512r1.b, m_customG, P512r1.r);
+                m_testCurveCustom = new ECCurve(false, P512r1.p, P512r1.a, P512r1.b, m_customG, P512r1.r, (short) 1);
             }
 
             m_memoryInfoOffset = snapshotAvailableMemory((short) 5, m_memoryInfo, m_memoryInfoOffset);
@@ -4590,7 +4553,7 @@ public class jcmathlib {
             PM.check(PM.TRAP_EC_SETCURVE_1);
 
             if (apdubuf[ISO7816.OFFSET_P2] == 1) { // If required, complete new custom curve and point is allocated
-                m_testCurveCustom = new ECCurve(false, SecP256r1.p, SecP256r1.a, SecP256r1.b, m_customG, SecP256r1.r);
+                m_testCurveCustom = new ECCurve(false, SecP256r1.p, SecP256r1.a, SecP256r1.b, m_customG, SecP256r1.r, (short) 1);
                 m_testPointCustom = new ECPoint(m_testCurveCustom, m_ecc.ech);
                 PM.check(PM.TRAP_EC_SETCURVE_2);
                 // Release unused previous objects
@@ -5091,7 +5054,7 @@ public class jcmathlib {
             // Pre-allocate all helper structures
             ecc = new ECConfig((short) 256);
             // Pre-allocate standard SecP256r1 curve and two EC points on this curve
-            curve = new ECCurve(false, SecP256r1.p, SecP256r1.a, SecP256r1.b, SecP256r1.G, SecP256r1.r);
+            curve = new ECCurve(false, SecP256r1.p, SecP256r1.a, SecP256r1.b, SecP256r1.G, SecP256r1.r, (short) 1);
             point1 = new ECPoint(curve, ecc.ech);
             point2 = new ECPoint(curve, ecc.ech);
         }
