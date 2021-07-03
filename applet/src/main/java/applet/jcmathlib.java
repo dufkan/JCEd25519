@@ -1661,6 +1661,7 @@ public class jcmathlib {
         Bignat helper_BN_D;
         Bignat helper_BN_E;
         Bignat helper_BN_F;
+        Bignat helper_BN_G;
 
         // These Bignats helperEC_BN_? are allocated
         Bignat helperEC_BN_A;
@@ -1699,6 +1700,7 @@ public class jcmathlib {
             helper_BN_D = new Bignat(MAX_BIGNAT_SIZE, memAlloc.getAllocatorType(ObjectAllocator.BNH_helper_BN_D), bnh);
             helper_BN_E = new Bignat(MAX_BIGNAT_SIZE, memAlloc.getAllocatorType(ObjectAllocator.BNH_helper_BN_E), bnh);
             helper_BN_F = new Bignat((short) (MAX_BIGNAT_SIZE + 2), memAlloc.getAllocatorType(ObjectAllocator.BNH_helper_BN_F), bnh); // +2 is to correct for infrequent RSA result with two or more leading zeroes
+            helper_BN_G = new Bignat(MAX_BIGNAT_SIZE, memAlloc.getAllocatorType(ObjectAllocator.BNH_helper_BN_G), bnh);
 
             helperEC_BN_A = new Bignat(MAX_POINT_SIZE, memAlloc.getAllocatorType(ObjectAllocator.ECPH_helperEC_BN_A), bnh);
             helperEC_BN_B = new Bignat(MAX_COORD_SIZE, memAlloc.getAllocatorType(ObjectAllocator.ECPH_helperEC_BN_B), bnh);
@@ -3503,83 +3505,131 @@ public class jcmathlib {
         }
 
 
-        //
         /**
          * Computes square root of provided bignat which MUST be prime using Tonelli
          * Shanks Algorithm. The result (one of the two roots) is stored to this.
          * @param p value to compute square root from
          */
         public void sqrt_FP(Bignat p) {
-            PM.check(PM.TRAP_BIGNAT_SQRT_1);
-            //1. By factoring out powers of 2, find Q and S such that p-1=Q2^S p-1=Q*2^S and Q is odd
+            // 1. Find Q and S such that p - 1 = Q * 2^S and Q is odd
             bnh.fnc_sqrt_p_1.lock();
             bnh.fnc_sqrt_p_1.clone(p);
-            PM.check(PM.TRAP_BIGNAT_SQRT_2);
             bnh.fnc_sqrt_p_1.decrement_one();
-            PM.check(PM.TRAP_BIGNAT_SQRT_3);
 
-            //Compute Q
-            bnh.fnc_sqrt_Q.lock();
-            bnh.fnc_sqrt_Q.clone(bnh.fnc_sqrt_p_1);
-            bnh.fnc_sqrt_Q.divide_by_2(); //Q /= 2
-            PM.check(PM.TRAP_BIGNAT_SQRT_4);
-
-            //Compute S
             bnh.fnc_sqrt_S.lock();
             bnh.fnc_sqrt_S.set_size(p.length());
             bnh.fnc_sqrt_S.zero();
-            bnh.fnc_sqrt_tmp.lock();
-            bnh.fnc_sqrt_tmp.set_size(p.length());
-            bnh.fnc_sqrt_tmp.zero();
+            bnh.fnc_sqrt_Q.lock();
+            bnh.fnc_sqrt_Q.clone(bnh.fnc_sqrt_p_1);
 
-            PM.check(PM.TRAP_BIGNAT_SQRT_5);
-            while (bnh.fnc_sqrt_tmp.same_value(bnh.fnc_sqrt_Q)==false){
+            while (!bnh.fnc_sqrt_Q.is_odd()) {
                 bnh.fnc_sqrt_S.increment_one();
-                bnh.fnc_sqrt_tmp.mod_mult(bnh.fnc_sqrt_S, bnh.fnc_sqrt_Q, p);
+                bnh.fnc_sqrt_Q.divide_by_2();
             }
-            bnh.fnc_sqrt_tmp.unlock();
-            PM.check(PM.TRAP_BIGNAT_SQRT_6);
-            bnh.fnc_sqrt_S.unlock();
 
-            //2. Find the first quadratic non-residue z by brute-force search
+            // 2. Find the first quadratic non-residue z by brute-force search
             bnh.fnc_sqrt_exp.lock();
             bnh.fnc_sqrt_exp.clone(bnh.fnc_sqrt_p_1);
-            PM.check(PM.TRAP_BIGNAT_SQRT_7);
             bnh.fnc_sqrt_exp.divide_by_2();
-
-            PM.check(PM.TRAP_BIGNAT_SQRT_8);
 
             bnh.fnc_sqrt_z.lock();
             bnh.fnc_sqrt_z.set_size(p.length());
             bnh.fnc_sqrt_z.one();
             bnh.fnc_sqrt_tmp.lock();
+            bnh.fnc_sqrt_tmp.set_size(p.length());
             bnh.fnc_sqrt_tmp.zero();
             bnh.fnc_sqrt_tmp.copy(Bignat_Helper.ONE);
 
-            PM.check(PM.TRAP_BIGNAT_SQRT_9);
-            while (bnh.fnc_sqrt_tmp.same_value(bnh.fnc_sqrt_p_1)==false) {
+            while (!bnh.fnc_sqrt_tmp.same_value(bnh.fnc_sqrt_p_1)) {
                 bnh.fnc_sqrt_z.increment_one();
                 bnh.fnc_sqrt_tmp.copy(bnh.fnc_sqrt_z);
-                bnh.fnc_sqrt_tmp.mod_exp(bnh.fnc_sqrt_exp, p);
+                bnh.fnc_sqrt_tmp.mod_exp(bnh.fnc_sqrt_exp, p); // Euler's criterion
             }
-            PM.check(PM.TRAP_BIGNAT_SQRT_10);
             bnh.fnc_sqrt_p_1.unlock();
             bnh.fnc_sqrt_tmp.unlock();
-            bnh.fnc_sqrt_z.unlock();
+
+            // 3. Compute first candidate
             bnh.fnc_sqrt_exp.copy(bnh.fnc_sqrt_Q);
-            bnh.fnc_sqrt_Q.unlock();
-            PM.check(PM.TRAP_BIGNAT_SQRT_11);
             bnh.fnc_sqrt_exp.increment_one();
-            PM.check(PM.TRAP_BIGNAT_SQRT_12);
             bnh.fnc_sqrt_exp.divide_by_2();
-            PM.check(PM.TRAP_BIGNAT_SQRT_13);
+
+            bnh.fnc_sqrt_t.lock();
+            bnh.fnc_sqrt_t.copy(this);
+            bnh.fnc_sqrt_t.mod_exp(bnh.fnc_sqrt_Q, p);
+
+            if (bnh.fnc_sqrt_t.is_zero()) {
+                bnh.fnc_sqrt_z.unlock();
+                bnh.fnc_sqrt_S.unlock();
+                bnh.fnc_sqrt_t.unlock();
+                bnh.fnc_sqrt_exp.unlock();
+                bnh.fnc_sqrt_Q.unlock();
+                this.zero();
+                return;
+            }
 
             this.mod(p);
-            PM.check(PM.TRAP_BIGNAT_SQRT_14);
             this.mod_exp(bnh.fnc_sqrt_exp, p);
-            PM.check(PM.TRAP_BIGNAT_SQRT_15);
             bnh.fnc_sqrt_exp.unlock();
-        } // end void sqrt(Bignat p)
+
+            if (bnh.fnc_sqrt_t.same_value(Bignat_Helper.ONE)) {
+                bnh.fnc_sqrt_z.unlock();
+                bnh.fnc_sqrt_S.unlock();
+                bnh.fnc_sqrt_t.unlock();
+                bnh.fnc_sqrt_Q.unlock();
+                return;
+            }
+
+            // 4. Search for further candidates
+            bnh.fnc_sqrt_z.mod_exp(bnh.fnc_sqrt_Q, p);
+            bnh.fnc_sqrt_Q.unlock();
+
+            while(true) {
+                bnh.fnc_sqrt_tmp.lock();
+                bnh.fnc_sqrt_tmp.copy(bnh.fnc_sqrt_t);
+                bnh.fnc_sqrt_i.lock();
+                bnh.fnc_sqrt_i.set_size(p.length());
+                bnh.fnc_sqrt_i.zero();
+
+                do {
+                    bnh.fnc_sqrt_tmp.mod_exp2(p);
+                    bnh.fnc_sqrt_i.increment_one();
+                } while (!bnh.fnc_sqrt_tmp.same_value(Bignat_Helper.ONE));
+
+                bnh.fnc_sqrt_tmp.unlock();
+
+                bnh.fnc_sqrt_b.lock();
+                bnh.fnc_sqrt_b.copy(bnh.fnc_sqrt_z);
+                bnh.fnc_sqrt_S.subtract(bnh.fnc_sqrt_i);
+                bnh.fnc_sqrt_S.decrement_one();
+
+                bnh.fnc_sqrt_tmp.lock();
+                bnh.fnc_sqrt_tmp.one();
+                while(!bnh.fnc_sqrt_S.is_zero()) {
+                    bnh.fnc_sqrt_tmp.shift_left();
+                    bnh.fnc_sqrt_S.decrement_one();
+                }
+                bnh.fnc_sqrt_b.mod_exp(bnh.fnc_sqrt_tmp, p); // this is computed wrong
+                bnh.fnc_sqrt_tmp.unlock();
+                bnh.fnc_sqrt_S.copy(bnh.fnc_sqrt_i);
+                bnh.fnc_sqrt_i.unlock();
+                bnh.fnc_sqrt_z.copy(bnh.fnc_sqrt_b);
+                bnh.fnc_sqrt_z.mod_exp2(p);
+                bnh.fnc_sqrt_t.mod_mult(bnh.fnc_sqrt_t, bnh.fnc_sqrt_z, p);
+                this.mod_mult(this, bnh.fnc_sqrt_b, p);
+                bnh.fnc_sqrt_b.unlock();
+
+                if (bnh.fnc_sqrt_t.is_zero()) {
+                    this.zero();
+                    break;
+                }
+                if (bnh.fnc_sqrt_t.same_value(Bignat_Helper.ONE)) {
+                    break;
+                }
+            }
+            bnh.fnc_sqrt_z.unlock();
+            bnh.fnc_sqrt_S.unlock();
+            bnh.fnc_sqrt_t.unlock();
+        }
 
 
         /**
@@ -4056,6 +4106,9 @@ public class jcmathlib {
         Bignat fnc_sqrt_tmp;
         Bignat fnc_sqrt_exp;
         Bignat fnc_sqrt_z;
+        Bignat fnc_sqrt_i;
+        Bignat fnc_sqrt_t;
+        Bignat fnc_sqrt_b;
 
         Bignat fnc_mod_minus_2;
 
@@ -4124,11 +4177,14 @@ public class jcmathlib {
             fnc_negate_tmp = rm.helper_BN_B;
 
             fnc_sqrt_S = rm.helper_BN_A;
-            fnc_sqrt_exp = rm.helper_BN_A;
-            fnc_sqrt_p_1 = rm.helper_BN_B;
+            fnc_sqrt_exp = rm.helper_BN_G;
+            fnc_sqrt_p_1 = rm.helper_BN_D;
             fnc_sqrt_Q = rm.helper_BN_C;
-            fnc_sqrt_tmp = rm.helper_BN_D;
-            fnc_sqrt_z = rm.helper_BN_E;
+            fnc_sqrt_tmp = rm.helper_BN_E;
+            fnc_sqrt_z = rm.helper_BN_B;
+            fnc_sqrt_i = rm.helper_BN_G;
+            fnc_sqrt_t = rm.helper_BN_D;
+            fnc_sqrt_b = rm.helper_BN_C;
 
             fnc_mod_mult_tmpThis = rm.helper_BN_E; // mod_mult is called from  fnc_sqrt => requires helper_BN_E not being locked in fnc_sqrt when mod_mult is called
 
@@ -5359,15 +5415,16 @@ public class jcmathlib {
         public static final byte BNH_helper_BN_D         = 5;
         public static final byte BNH_helper_BN_E         = 6;
         public static final byte BNH_helper_BN_F         = 7;
+        public static final byte BNH_helper_BN_G         = 8;
 
-        public static final byte ECPH_helperEC_BN_A      = 8;
-        public static final byte ECPH_helperEC_BN_B      = 9;
-        public static final byte ECPH_helperEC_BN_C      = 10;
-        public static final byte ECPH_helperEC_BN_D      = 11;
-        public static final byte ECPH_helperEC_BN_E      = 12;
-        public static final byte ECPH_helperEC_BN_F      = 13;
-        public static final byte ECPH_uncompressed_point_arr1 = 14;
-        public static final byte ECPH_hashArray          = 15;
+        public static final byte ECPH_helperEC_BN_A      = 9;
+        public static final byte ECPH_helperEC_BN_B      = 10;
+        public static final byte ECPH_helperEC_BN_C      = 11;
+        public static final byte ECPH_helperEC_BN_D      = 12;
+        public static final byte ECPH_helperEC_BN_E      = 13;
+        public static final byte ECPH_helperEC_BN_F      = 14;
+        public static final byte ECPH_uncompressed_point_arr1 = 15;
+        public static final byte ECPH_hashArray          = 16;
 
         public static final short ALLOCATOR_TYPE_ARRAY_LENGTH = (short) (ECPH_hashArray + 1);
 
@@ -5408,6 +5465,7 @@ public class jcmathlib {
             ALLOCATOR_TYPE_ARRAY[BNH_helper_BN_D] = JCSystem.MEMORY_TYPE_TRANSIENT_RESET;
             ALLOCATOR_TYPE_ARRAY[BNH_helper_BN_E] = JCSystem.MEMORY_TYPE_TRANSIENT_RESET;
             ALLOCATOR_TYPE_ARRAY[BNH_helper_BN_F] = JCSystem.MEMORY_TYPE_TRANSIENT_RESET;
+            ALLOCATOR_TYPE_ARRAY[BNH_helper_BN_G] = JCSystem.MEMORY_TYPE_TRANSIENT_RESET;
             ALLOCATOR_TYPE_ARRAY[ECPH_helperEC_BN_B] = JCSystem.MEMORY_TYPE_TRANSIENT_RESET;
             ALLOCATOR_TYPE_ARRAY[ECPH_helperEC_BN_C] = JCSystem.MEMORY_TYPE_TRANSIENT_RESET;
             ALLOCATOR_TYPE_ARRAY[ECPH_uncompressed_point_arr1] = JCSystem.MEMORY_TYPE_TRANSIENT_RESET;
