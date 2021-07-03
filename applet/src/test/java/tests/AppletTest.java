@@ -2,6 +2,7 @@ package tests;
 
 import applet.Consts;
 import applet.jcmathlib;
+import cz.muni.fi.crocs.rcard.client.CardManager;
 import cz.muni.fi.crocs.rcard.client.CardType;
 import org.junit.Assert;
 import org.junit.jupiter.api.*;
@@ -38,15 +39,32 @@ public class AppletTest extends BaseTest {
     public void tearDownMethod() throws Exception {
     }
 
-    // Example test
-    @Test
-    public void keygen() throws Exception {
+    public void keygen(CardManager cm) throws Exception {
         final CommandAPDU cmd = new CommandAPDU(Consts.CLA_ED25519, Consts.INS_KEYGEN,0, 0);
-        final ResponseAPDU responseAPDU = connect().transmit(cmd);
+        final ResponseAPDU responseAPDU = cm.transmit(cmd);
         Assert.assertNotNull(responseAPDU);
         Assert.assertEquals(0x9000, responseAPDU.getSW());
         Assert.assertNotNull(responseAPDU.getBytes());
         Assert.assertEquals(65, responseAPDU.getData().length);
+        Assert.assertEquals(0x04, responseAPDU.getData()[0]);
+    }
+
+    @Test
+    public void keygen_and_sign() throws Exception {
+        final CardManager cm = connect();
+
+        keygen(cm);
+
+        byte[] data = new byte[32];
+        for(int i = 0; i < data.length; ++i)
+            data[i] = (byte) (0xff & i);
+
+        final CommandAPDU cmd = new CommandAPDU(Consts.CLA_ED25519, Consts.INS_SIGN,0, 0, data);
+        final ResponseAPDU responseAPDU = cm.transmit(cmd);
+        Assert.assertNotNull(responseAPDU);
+        Assert.assertEquals(0x9000, responseAPDU.getSW());
+        Assert.assertNotNull(responseAPDU.getBytes());
+        Assert.assertEquals(65 + 32, responseAPDU.getData().length);
         Assert.assertEquals(0x04, responseAPDU.getData()[0]);
     }
 }

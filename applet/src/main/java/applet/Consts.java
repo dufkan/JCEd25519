@@ -3,6 +3,7 @@ package applet;
 public class Consts {
     public static final byte CLA_ED25519 = (byte) 0xED;
     public static final byte INS_KEYGEN = (byte) 0xA0;
+    public static final byte INS_SIGN = (byte) 0xA1;
 
     final static short SW_Exception = (short) 0xff01;
     final static short SW_ArrayIndexOutOfBoundsException = (short) 0xff02;
