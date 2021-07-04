@@ -64,25 +64,6 @@ public class MainApplet extends Applet implements MultiSelectable
 		transformC.from_byte_array(TRANSFORM_C);
 		transformA3.from_byte_array(TRANSFORM_A3);
 
-		/*
-		Bignat p = new Bignat((short) 3, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
-		Bignat n = new Bignat((short) 3, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
-
-		byte[] pbytes = new byte[3];
-		pbytes[0] = (byte)0x01;
-		pbytes[1] = (byte)0x86;
-		pbytes[2] = (byte)0xd1;
-
-		byte[] nbytes = new byte[3];
-		nbytes[0] = (byte)0x00;
-		nbytes[1] = (byte)0xad;
-		nbytes[2] = (byte)0x72;
-		p.from_byte_array(pbytes);
-		n.from_byte_array(nbytes);
-
-		n.sqrt_FP(p);
-		*/
-
 		register();
 	}
 
@@ -149,8 +130,8 @@ public class MainApplet extends Applet implements MultiSelectable
 		publicKey.setW(curve.G, (short) 0, curve.POINT_SIZE);
 		publicKey.multiplication(privateKey);
 
-		transform_ed25519(publicKey, apduBuffer, (short) 0);
-		apdu.setOutgoingAndSend((short) 0, (short) 64);
+		encodeEd25519(publicKey, apduBuffer, (short) 0);
+		apdu.setOutgoingAndSend((short) 0, (short) 32);
 	}
 
 	private void sign(APDU apdu) {
@@ -164,10 +145,10 @@ public class MainApplet extends Applet implements MultiSelectable
 
 		// Compute challenge e
 		hasher.reset();
-		publicNonce.getW(ramArray, (short) 0);
-		hasher.update(ramArray, (short) 0, curve.POINT_SIZE); // R TODO transform to Ed25519
-		publicKey.getW(ramArray, (short) 0);
-		hasher.update(ramArray, (short) 0, curve.POINT_SIZE); // A TODO transform to Ed25519
+		encodeEd25519(publicNonce, ramArray, (short) 0);
+		hasher.update(ramArray, (short) 0, curve.COORD_SIZE); // R
+		encodeEd25519(publicKey, ramArray, (short) 0);
+		hasher.update(ramArray, (short) 0, curve.COORD_SIZE); // A
 		hasher.doFinal(apduBuffer, ISO7816.OFFSET_CDATA, (short) 32, ramArray, (short) 0); // m
 		signature.from_byte_array((short) 32, (short) 0, ramArray, (short) 0);
 
@@ -176,12 +157,14 @@ public class MainApplet extends Applet implements MultiSelectable
 		signature.mod_add(privateNonce, curveOrder);
 
 		// Return signature (R, s)
-		publicNonce.getW(apduBuffer, (short) 0);
-		signature.copy_to_buffer(apduBuffer, curve.POINT_SIZE);
-		apdu.setOutgoingAndSend((short) 0, (short) (signature.length() + curve.POINT_SIZE));
+		encodeEd25519(publicNonce, apduBuffer, (short) 0);
+		signature.copy_to_buffer(apduBuffer, curve.COORD_SIZE);
+		changeEndianity(apduBuffer, curve.POINT_SIZE, curve.COORD_SIZE);
+
+		apdu.setOutgoingAndSend((short) 0, (short) (curve.COORD_SIZE + curve.COORD_SIZE));
 	}
 
-	public void transform_ed25519(ECPoint point, byte[] buffer, short offset) {
+	private void encodeEd25519(ECPoint point, byte[] buffer, short offset) {
 		point.getW(ramArray, (short) 0);
 
 		// Compute X
@@ -191,7 +174,8 @@ public class MainApplet extends Applet implements MultiSelectable
 		transformX.mod_mult(transformX, transformC, curve.pBN);
 		transformY.mod_inv(curve.pBN);
 		transformX.mod_mult(transformX, transformY, curve.pBN);
-		transformX.copy_to_buffer(buffer, offset);
+
+		boolean x_bit = transformX.is_odd();
 
 		// Compute Y
 		transformX.from_byte_array((short) 32, (short) 0, ramArray, (short) 1);
@@ -201,6 +185,18 @@ public class MainApplet extends Applet implements MultiSelectable
 		transformY.mod_add(Bignat_Helper.ONE, curve.pBN);
 		transformY.mod_inv(curve.pBN);
 		transformX.mod_mult(transformX, transformY, curve.pBN);
-		transformX.copy_to_buffer(buffer, (short) (offset + 32));
+		transformX.copy_to_buffer(buffer, offset);
+
+		buffer[offset] |= x_bit ? (byte) 0x80 : (byte) 0x00;
+
+		changeEndianity(buffer, offset, (short) 32);
+	}
+
+	private void changeEndianity(byte[] array, short offset, short len) {
+		for(short i = 0; i < (short) (len / 2); ++i) {
+			byte tmp = array[(short) (offset + len - i - 1)];
+			array[(short) (offset + len - i - 1)] = array[(short) (offset + i)];
+			array[(short) (offset + i)] = tmp;
+		}
 	}
 }

@@ -45,7 +45,7 @@ public class AppletTest extends BaseTest {
         Assert.assertNotNull(responseAPDU);
         Assert.assertEquals(0x9000, responseAPDU.getSW());
         Assert.assertNotNull(responseAPDU.getBytes());
-        Assert.assertEquals(64, responseAPDU.getData().length);
+        Assert.assertEquals(32, responseAPDU.getData().length);
     }
 
     @Test
@@ -63,7 +63,6 @@ public class AppletTest extends BaseTest {
         Assert.assertNotNull(responseAPDU);
         Assert.assertEquals(0x9000, responseAPDU.getSW());
         Assert.assertNotNull(responseAPDU.getBytes());
-        Assert.assertEquals(65 + 32, responseAPDU.getData().length);
-        Assert.assertEquals(0x04, responseAPDU.getData()[0]);
+        Assert.assertEquals(32 + 32, responseAPDU.getData().length);
     }
 }
