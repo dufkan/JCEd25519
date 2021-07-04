@@ -8,7 +8,27 @@ import applet.jcmathlib.*;
 
 public class MainApplet extends Applet implements MultiSelectable
 {
-	private static final short BUFFER_SIZE = 65;
+	public static final byte[] TRANSFORM_C = {
+			(byte) 0x70, (byte) 0xd9, (byte) 0x12, (byte) 0x0b,
+			(byte) 0x9f, (byte) 0x5f, (byte) 0xf9, (byte) 0x44,
+			(byte) 0x2d, (byte) 0x84, (byte) 0xf7, (byte) 0x23,
+			(byte) 0xfc, (byte) 0x03, (byte) 0xb0, (byte) 0x81,
+			(byte) 0x3a, (byte) 0x5e, (byte) 0x2c, (byte) 0x2e,
+			(byte) 0xb4, (byte) 0x82, (byte) 0xe5, (byte) 0x7d,
+			(byte) 0x33, (byte) 0x91, (byte) 0xfb, (byte) 0x55,
+			(byte) 0x00, (byte) 0xba, (byte) 0x81, (byte) 0xe7
+	};
+	public static final byte[] TRANSFORM_A3 = {
+			(byte) 0x2a, (byte) 0xaa, (byte) 0xaa, (byte) 0xaa,
+			(byte) 0xaa, (byte) 0xaa, (byte) 0xaa, (byte) 0xaa,
+			(byte) 0xaa, (byte) 0xaa, (byte) 0xaa, (byte) 0xaa,
+			(byte) 0xaa, (byte) 0xaa, (byte) 0xaa, (byte) 0xaa,
+			(byte) 0xaa, (byte) 0xaa, (byte) 0xaa, (byte) 0xaa,
+			(byte) 0xaa, (byte) 0xaa, (byte) 0xaa, (byte) 0xaa,
+			(byte) 0xaa, (byte) 0xaa, (byte) 0xaa, (byte) 0xaa,
+			(byte) 0xaa, (byte) 0xad, (byte) 0x24, (byte) 0x51
+	};
+
 	public ECConfig ecc = new ECConfig((short) 256);
 	public ECCurve curve = new ECCurve(true, Wei25519.p, Wei25519.a, Wei25519.b, Wei25519.G, Wei25519.r, Wei25519.k);
 	public Bignat curveOrder = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
@@ -20,11 +40,15 @@ public class MainApplet extends Applet implements MultiSelectable
 	public ECPoint publicNonce = new ECPoint(curve, ecc.ech);
 
 	public Bignat signature = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
-	public Bignat tmpBignat = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
+
+	public Bignat transformC = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
+	public Bignat transformA3 = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
+	public Bignat transformX = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
+	public Bignat transformY = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
 
 	public MessageDigest hasher = MessageDigest.getInstance(MessageDigest.ALG_SHA_512, false);
 
-	private byte[] ramArray = JCSystem.makeTransientByteArray(BUFFER_SIZE, JCSystem.CLEAR_ON_DESELECT);
+	private byte[] ramArray = JCSystem.makeTransientByteArray(Wei25519.POINT_SIZE, JCSystem.CLEAR_ON_DESELECT);
 	private RandomData random = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
 
 	public static void install(byte[] bArray, short bOffset, byte bLength) 
@@ -36,8 +60,11 @@ public class MainApplet extends Applet implements MultiSelectable
 	{
 		ecc.bnh.bIsSimulator = true;
 
-		curveOrder.from_byte_array(SecP256r1.r);
+		curveOrder.from_byte_array(Wei25519.r);
+		transformC.from_byte_array(TRANSFORM_C);
+		transformA3.from_byte_array(TRANSFORM_A3);
 
+		/*
 		Bignat p = new Bignat((short) 3, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
 		Bignat n = new Bignat((short) 3, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
 
@@ -54,6 +81,7 @@ public class MainApplet extends Applet implements MultiSelectable
 		n.from_byte_array(nbytes);
 
 		n.sqrt_FP(p);
+		*/
 
 		register();
 	}
@@ -121,8 +149,8 @@ public class MainApplet extends Applet implements MultiSelectable
 		publicKey.setW(curve.G, (short) 0, curve.POINT_SIZE);
 		publicKey.multiplication(privateKey);
 
-		publicKey.getW(apduBuffer, (short) 0);
-		apdu.setOutgoingAndSend((short) 0, Wei25519.POINT_SIZE);
+		transform_ed25519(publicKey, apduBuffer, (short) 0);
+		apdu.setOutgoingAndSend((short) 0, (short) 64);
 	}
 
 	private void sign(APDU apdu) {
@@ -151,5 +179,28 @@ public class MainApplet extends Applet implements MultiSelectable
 		publicNonce.getW(apduBuffer, (short) 0);
 		signature.copy_to_buffer(apduBuffer, curve.POINT_SIZE);
 		apdu.setOutgoingAndSend((short) 0, (short) (signature.length() + curve.POINT_SIZE));
+	}
+
+	public void transform_ed25519(ECPoint point, byte[] buffer, short offset) {
+		point.getW(ramArray, (short) 0);
+
+		// Compute X
+		transformX.from_byte_array((short) 32, (short) 0, ramArray, (short) 1);
+		transformY.from_byte_array((short) 32, (short) 0, ramArray, (short) 33);
+		transformX.mod_sub(transformA3, curve.pBN);
+		transformX.mod_mult(transformX, transformC, curve.pBN);
+		transformY.mod_inv(curve.pBN);
+		transformX.mod_mult(transformX, transformY, curve.pBN);
+		transformX.copy_to_buffer(buffer, offset);
+
+		// Compute Y
+		transformX.from_byte_array((short) 32, (short) 0, ramArray, (short) 1);
+		transformX.mod_sub(transformA3, curve.pBN);
+		transformY.copy(transformX);
+		transformX.decrement_one();
+		transformY.mod_add(Bignat_Helper.ONE, curve.pBN);
+		transformY.mod_inv(curve.pBN);
+		transformX.mod_mult(transformX, transformY, curve.pBN);
+		transformX.copy_to_buffer(buffer, (short) (offset + 32));
 	}
 }
