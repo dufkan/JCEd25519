@@ -39,7 +39,7 @@ public class MainApplet extends Applet implements MultiSelectable
 	public Bignat privateNonce = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
 	public ECPoint publicNonce = new ECPoint(curve, ecc.ech);
 
-	public Bignat signature = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
+	public Bignat signature = new Bignat((short) 64, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
 
 	public Bignat transformC = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
 	public Bignat transformA3 = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
@@ -126,7 +126,7 @@ public class MainApplet extends Applet implements MultiSelectable
 
 		random.generateData(ramArray, (short) 0, (short) 32);
 
-		privateKey.set_from_byte_array((short) 0, ramArray, (short) 0, (short) 32);
+		privateKey.from_byte_array((short) 32, (short) 0, ramArray, (short) 0);
 		publicKey.setW(curve.G, (short) 0, curve.POINT_SIZE);
 		publicKey.multiplication(privateKey);
 
@@ -139,7 +139,7 @@ public class MainApplet extends Applet implements MultiSelectable
 
 		// Generate nonce R
 		random.generateData(ramArray, (short) 0, (short) 32);
-		privateNonce.set_from_byte_array((short) 0, ramArray, (short) 0, (short) 32);
+		privateNonce.from_byte_array((short) 32, (short) 0, ramArray, (short) 0);
 		publicNonce.setW(Wei25519.G, (short) 0, Wei25519.POINT_SIZE);
 		publicNonce.multiplication(privateNonce);
 
@@ -150,7 +150,10 @@ public class MainApplet extends Applet implements MultiSelectable
 		encodeEd25519(publicKey, ramArray, (short) 0);
 		hasher.update(ramArray, (short) 0, curve.COORD_SIZE); // A
 		hasher.doFinal(apduBuffer, ISO7816.OFFSET_CDATA, (short) 32, ramArray, (short) 0); // m
-		signature.from_byte_array((short) 32, (short) 0, ramArray, (short) 0);
+		changeEndianity(ramArray, (short) 0, (short) 64);
+		signature.from_byte_array((short) 64, (short) 0, ramArray, (short) 0);
+		signature.mod(curveOrder);
+		signature.shrink();
 
 		// Compute signature s = r + ex
 		signature.mod_mult(privateKey, signature, curveOrder);
@@ -159,7 +162,7 @@ public class MainApplet extends Applet implements MultiSelectable
 		// Return signature (R, s)
 		encodeEd25519(publicNonce, apduBuffer, (short) 0);
 		signature.copy_to_buffer(apduBuffer, curve.COORD_SIZE);
-		changeEndianity(apduBuffer, curve.POINT_SIZE, curve.COORD_SIZE);
+		changeEndianity(apduBuffer, curve.COORD_SIZE, curve.COORD_SIZE);
 
 		apdu.setOutgoingAndSend((short) 0, (short) (curve.COORD_SIZE + curve.COORD_SIZE));
 	}
