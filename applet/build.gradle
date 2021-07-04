@@ -51,6 +51,7 @@ dependencies {
     testImplementation 'junit:junit:4.12'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.1.1'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.1.1'
+    testCompile 'net.i2p.crypto:eddsa:0.3.0'
 
     testImplementation(group: 'com.klinec', name: 'javacard-tools', version: '1.0.4') {
         exclude group: "com.klinec", module: "jcardsim"
