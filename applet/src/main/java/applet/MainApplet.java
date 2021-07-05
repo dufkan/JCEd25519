@@ -7,47 +7,26 @@ import javacard.security.RandomData;
 import applet.jcmathlib.*;
 
 public class MainApplet extends Applet implements MultiSelectable {
-	public static final byte[] TRANSFORM_C = {
-			(byte) 0x70, (byte) 0xd9, (byte) 0x12, (byte) 0x0b,
-			(byte) 0x9f, (byte) 0x5f, (byte) 0xf9, (byte) 0x44,
-			(byte) 0x2d, (byte) 0x84, (byte) 0xf7, (byte) 0x23,
-			(byte) 0xfc, (byte) 0x03, (byte) 0xb0, (byte) 0x81,
-			(byte) 0x3a, (byte) 0x5e, (byte) 0x2c, (byte) 0x2e,
-			(byte) 0xb4, (byte) 0x82, (byte) 0xe5, (byte) 0x7d,
-			(byte) 0x33, (byte) 0x91, (byte) 0xfb, (byte) 0x55,
-			(byte) 0x00, (byte) 0xba, (byte) 0x81, (byte) 0xe7
-	};
-	public static final byte[] TRANSFORM_A3 = {
-			(byte) 0x2a, (byte) 0xaa, (byte) 0xaa, (byte) 0xaa,
-			(byte) 0xaa, (byte) 0xaa, (byte) 0xaa, (byte) 0xaa,
-			(byte) 0xaa, (byte) 0xaa, (byte) 0xaa, (byte) 0xaa,
-			(byte) 0xaa, (byte) 0xaa, (byte) 0xaa, (byte) 0xaa,
-			(byte) 0xaa, (byte) 0xaa, (byte) 0xaa, (byte) 0xaa,
-			(byte) 0xaa, (byte) 0xaa, (byte) 0xaa, (byte) 0xaa,
-			(byte) 0xaa, (byte) 0xaa, (byte) 0xaa, (byte) 0xaa,
-			(byte) 0xaa, (byte) 0xad, (byte) 0x24, (byte) 0x51
-	};
-
-	public ECConfig ecc = new ECConfig((short) 256);
-	public ECCurve curve = new ECCurve(true, Wei25519.p, Wei25519.a, Wei25519.b, Wei25519.G, Wei25519.r, Wei25519.k);
-	public Bignat curveOrder = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
+	private ECConfig ecc = new ECConfig((short) 256);
+	private ECCurve curve = new ECCurve(true, Wei25519.p, Wei25519.a, Wei25519.b, Wei25519.G, Wei25519.r, Wei25519.k);
+	private Bignat curveOrder = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
 
 	private byte[] masterKey = new byte[32];
 	private byte[] prefix = new byte[32];
-	public Bignat privateKey = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
-	public ECPoint publicKey = new ECPoint(curve, ecc.ech);
+	private Bignat privateKey = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
+	private ECPoint publicKey = new ECPoint(curve, ecc.ech);
 
-	public Bignat privateNonce = new Bignat((short) 64, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
-	public ECPoint publicNonce = new ECPoint(curve, ecc.ech);
+	private Bignat privateNonce = new Bignat((short) 64, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
+	private ECPoint publicNonce = new ECPoint(curve, ecc.ech);
 
-	public Bignat signature = new Bignat((short) 64, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
+	private Bignat signature = new Bignat((short) 64, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
 
-	public Bignat transformC = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
-	public Bignat transformA3 = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
-	public Bignat transformX = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
-	public Bignat transformY = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
+	private Bignat transformC = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
+	private Bignat transformA3 = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
+	private Bignat transformX = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
+	private Bignat transformY = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
 
-	public MessageDigest hasher = MessageDigest.getInstance(MessageDigest.ALG_SHA_512, false);
+	private MessageDigest hasher = MessageDigest.getInstance(MessageDigest.ALG_SHA_512, false);
 
 	private byte[] ramArray = JCSystem.makeTransientByteArray(Wei25519.POINT_SIZE, JCSystem.CLEAR_ON_DESELECT);
 	private RandomData random = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
@@ -60,8 +39,8 @@ public class MainApplet extends Applet implements MultiSelectable {
 		ecc.bnh.bIsSimulator = true;
 
 		curveOrder.from_byte_array(Wei25519.r);
-		transformC.from_byte_array(TRANSFORM_C);
-		transformA3.from_byte_array(TRANSFORM_A3);
+		transformC.from_byte_array(Consts.TRANSFORM_C);
+		transformA3.from_byte_array(Consts.TRANSFORM_A3);
 
 		register();
 	}
