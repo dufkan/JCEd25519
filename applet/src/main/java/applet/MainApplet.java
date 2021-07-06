@@ -139,7 +139,7 @@ public class MainApplet extends Applet implements MultiSelectable {
 		signature.set_size((short) 64);
 		signature.from_byte_array((short) 64, (short) 0, ramArray, (short) 0);
 		signature.mod(curveOrder);
-		signature.shrink();
+		signature.deep_resize((short) 32);
 
 		// Compute signature s = r + ex
 		signature.mod_mult(privateKey, signature, curveOrder);
@@ -157,18 +157,22 @@ public class MainApplet extends Applet implements MultiSelectable {
 		point.getW(ramArray, (short) 0);
 
 		// Compute X
+		transformX.set_size((short) 32);
 		transformX.from_byte_array((short) 32, (short) 0, ramArray, (short) 1);
+		transformY.set_size((short) 32);
 		transformY.from_byte_array((short) 32, (short) 0, ramArray, (short) 33);
 		transformX.mod_sub(transformA3, curve.pBN);
 		transformX.mod_mult(transformX, transformC, curve.pBN);
 		transformY.mod_inv(curve.pBN);
 		transformX.mod_mult(transformX, transformY, curve.pBN);
+		transformX.deep_resize((short) 32);
 
 		boolean x_bit = transformX.is_odd();
 
 		// Compute Y
 		transformX.from_byte_array((short) 32, (short) 0, ramArray, (short) 1);
 		transformX.mod_sub(transformA3, curve.pBN);
+		transformY.set_size((short) 32);
 		transformY.copy(transformX);
 		transformX.decrement_one();
 		transformY.mod_add(Bignat_Helper.ONE, curve.pBN);
@@ -197,7 +201,7 @@ public class MainApplet extends Applet implements MultiSelectable {
 		privateNonce.set_size((short) 64);
 		privateNonce.from_byte_array((short) 64, (short) 0, ramArray, (short) 0);
 		privateNonce.mod(curveOrder);
-		privateNonce.shrink();
+		privateNonce.deep_resize((short) 32);
 	}
 
 	private void randomNonce() {

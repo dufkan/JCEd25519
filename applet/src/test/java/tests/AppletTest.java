@@ -62,21 +62,23 @@ public class AppletTest extends BaseTest {
 
         byte[] pubkeyBytes = keygen(cm);
 
-        byte[] data = new byte[32];
-        for(int i = 0; i < data.length; ++i)
-            data[i] = (byte) (0xff & i);
+        for(int j = 0; j < 256; ++j) {
+            byte[] data = new byte[32];
+            for (int i = 0; i < data.length; ++i)
+                data[i] = (byte) ((0xff & i) + j);
 
-        final CommandAPDU cmd = new CommandAPDU(Consts.CLA_ED25519, Consts.INS_SIGN,0, 0, data);
-        final ResponseAPDU responseAPDU = cm.transmit(cmd);
-        Assert.assertNotNull(responseAPDU);
-        Assert.assertEquals(0x9000, responseAPDU.getSW());
-        Assert.assertNotNull(responseAPDU.getBytes());
-        Assert.assertEquals(32 + 32, responseAPDU.getData().length);
-        EdDSAParameterSpec spec = EdDSANamedCurveTable.getByName(EdDSANamedCurveTable.ED_25519);
-        Signature sgr = new EdDSAEngine(MessageDigest.getInstance(spec.getHashAlgorithm()));
-        PublicKey pubKey = new EdDSAPublicKey(new EdDSAPublicKeySpec(pubkeyBytes, spec));
-        sgr.initVerify(pubKey);
-        sgr.update(data);
-        Assert.assertTrue(sgr.verify(responseAPDU.getData()));
+            final CommandAPDU cmd = new CommandAPDU(Consts.CLA_ED25519, Consts.INS_SIGN, 0, 0, data);
+            final ResponseAPDU responseAPDU = cm.transmit(cmd);
+            Assert.assertNotNull(responseAPDU);
+            Assert.assertEquals(0x9000, responseAPDU.getSW());
+            Assert.assertNotNull(responseAPDU.getBytes());
+            Assert.assertEquals(32 + 32, responseAPDU.getData().length);
+            EdDSAParameterSpec spec = EdDSANamedCurveTable.getByName(EdDSANamedCurveTable.ED_25519);
+            Signature sgr = new EdDSAEngine(MessageDigest.getInstance(spec.getHashAlgorithm()));
+            PublicKey pubKey = new EdDSAPublicKey(new EdDSAPublicKeySpec(pubkeyBytes, spec));
+            sgr.initVerify(pubKey);
+            sgr.update(data);
+            Assert.assertTrue(sgr.verify(responseAPDU.getData()));
+        }
     }
 }
