@@ -1,30 +1,18 @@
 package applet;
 
 import javacard.framework.*;
-import javacard.security.CryptoException;
-import javacard.security.MessageDigest;
-import javacard.security.RandomData;
+import javacard.security.*;
 import applet.jcmathlib.*;
 
 public class MainApplet extends Applet implements MultiSelectable {
-	private ECConfig ecc = new ECConfig((short) 256);
-	private ECCurve curve = new ECCurve(true, Wei25519.p, Wei25519.a, Wei25519.b, Wei25519.G, Wei25519.r, Wei25519.k);
-	private Bignat curveOrder = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
+	private ECConfig ecc;
+	private ECCurve curve;
+	private Bignat curveOrder, privateKey, privateNonce, signature;
+	private Bignat transformC, transformA3, transformX, transformY;
+	private ECPoint publicKey, publicNonce;
 
 	private byte[] masterKey = new byte[32];
 	private byte[] prefix = new byte[32];
-	private Bignat privateKey = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
-	private ECPoint publicKey = new ECPoint(curve, ecc.ech);
-
-	private Bignat privateNonce = new Bignat((short) 64, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
-	private ECPoint publicNonce = new ECPoint(curve, ecc.ech);
-
-	private Bignat signature = new Bignat((short) 64, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
-
-	private Bignat transformC = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
-	private Bignat transformA3 = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
-	private Bignat transformX = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
-	private Bignat transformY = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
 
 	private MessageDigest hasher = MessageDigest.getInstance(MessageDigest.ALG_SHA_512, false);
 
@@ -36,11 +24,28 @@ public class MainApplet extends Applet implements MultiSelectable {
 	}
 
 	public MainApplet(byte[] buffer, short offset, byte length) {
-		ecc.bnh.bIsSimulator = true;
+	    OperationSupport os = OperationSupport.getInstance();
+	    os.setCard(OperationSupport.SIMULATOR);
+
+		ecc = new ECConfig((short) 256);
+
+		curveOrder = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
+		privateKey = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
+		privateNonce = new Bignat((short) 64, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
+		signature = new Bignat((short) 64, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
+
+		transformC = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
+		transformA3 = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
+		transformX = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
+		transformY = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
 
 		curveOrder.from_byte_array(Wei25519.r);
 		transformC.from_byte_array(Consts.TRANSFORM_C);
 		transformA3.from_byte_array(Consts.TRANSFORM_A3);
+
+		curve = new ECCurve(true, Wei25519.p, Wei25519.a, Wei25519.b, Wei25519.G, Wei25519.r, Wei25519.k);
+		publicKey = new ECPoint(curve, ecc.ech);
+		publicNonce = new ECPoint(curve, ecc.ech);
 
 		register();
 	}
@@ -107,7 +112,7 @@ public class MainApplet extends Applet implements MultiSelectable {
 		ramArray[0] &= (byte) 0xf8; // Clear lowest three bits
 		ramArray[31] &= (byte) 0x7f; // Clear highest bit
 		ramArray[31] |= (byte) 0x40; // Set second-highest bit
-        changeEndianity(ramArray, (short) 0, (short) 32);
+		changeEndianity(ramArray, (short) 0, (short) 32);
 
 		Util.arrayCopyNonAtomic(ramArray, (short) 32, prefix, (short) 0, (short) 32);
 
