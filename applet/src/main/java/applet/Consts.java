@@ -4,7 +4,7 @@ public class Consts {
     public static final byte CLA_ED25519 = (byte) 0x00;
     public static final byte INS_KEYGEN = (byte) 0xD0;
     public static final byte INS_SIGN = (byte) 0xD1;
-    public static final byte INS_SETUP = (byte) 0xD2;
+    public static final byte INS_GET_PRIV = (byte) 0xD2;
 
     public final static short SW_Exception = (short) 0xff01;
     public final static short SW_ArrayIndexOutOfBoundsException = (short) 0xff02;

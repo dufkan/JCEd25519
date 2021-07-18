@@ -62,6 +62,11 @@ public class MainApplet extends Applet implements MultiSelectable {
 					case Consts.INS_SIGN:
 						sign(apdu);
 						break;
+
+					case Consts.INS_GET_PRIV:
+						Util.arrayCopyNonAtomic(privateKey.as_byte_array(), (short) 0, apdu.getBuffer(), (short) 0, (short) 32);
+						apdu.setOutgoingAndSend((short) 0, (short) 32);
+						break;
 					default:
 						ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
 				}

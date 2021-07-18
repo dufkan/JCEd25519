@@ -28,6 +28,7 @@ public class AppletTest extends BaseTest {
     public AppletTest() {
         // Change card type here if you want to use physical card
         setCardType(CardType.JCARDSIMLOCAL);
+        setSimulateStateful(true);
     }
 
     @BeforeAll
@@ -61,6 +62,7 @@ public class AppletTest extends BaseTest {
         final CardManager cm = connect();
 
         byte[] pubkeyBytes = keygen(cm);
+        cm.transmit(new CommandAPDU(Consts.CLA_ED25519, Consts.INS_GET_PRIV, 0, 0));
 
         for(int j = 0; j < 256; ++j) {
             byte[] data = new byte[32];
