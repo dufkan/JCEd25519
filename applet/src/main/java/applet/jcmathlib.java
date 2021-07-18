@@ -176,18 +176,6 @@ public class jcmathlib {
             this.thePointKeyPair = this.theCurve.newKeyPair(this.thePointKeyPair);
             this.thePoint = (ECPublicKey) thePointKeyPair.getPublic();
         }
-        /**
-         * Generates new random point value.
-         */
-        public void randomize(){
-            if (this.thePointKeyPair == null) {
-                this.thePointKeyPair = this.theCurve.newKeyPair(this.thePointKeyPair);
-                this.thePoint = (ECPublicKey) thePointKeyPair.getPublic();
-            }
-            else {
-                this.thePointKeyPair.genKeyPair();
-            }
-        }
 
         /**
          * Copy value of provided point into this. This and other point must have
@@ -300,6 +288,10 @@ public class jcmathlib {
          */
         public void add(ECPoint other) {
             boolean samePoint = this == other || isEqual(other);
+            if (samePoint && OperationSupport.getInstance().ECDH_XY) {
+                this.multiplication(Bignat_Helper.TWO);
+                return;
+            }
 
             ech.lock(ech.uncompressed_point_arr1);
             this.thePoint.getW(ech.uncompressed_point_arr1, (short) 0);
@@ -446,7 +438,6 @@ public class jcmathlib {
          * @return length of resulting value (in bytes)
          */
         public short multiplication_xy_KA(Bignat scalar, byte[] outBuffer, short outBufferOffset) {
-            // NOTE: potential problem on real cards (j2e) - when small scalar is used (e.g., Bignat.TWO), operation sometimes freezes
             theCurve.disposable_priv.setS(scalar.as_byte_array(), (short) 0, scalar.length());
             ech.multKA.init(theCurve.disposable_priv);
 
@@ -791,6 +782,7 @@ public class jcmathlib {
         public Bignat pBN;
         public Bignat aBN;
         public Bignat bBN;
+        public Bignat rBN;
 
         public KeyPair disposable_pair;
         public ECPrivateKey disposable_priv;
@@ -811,7 +803,7 @@ public class jcmathlib {
          */
         public ECCurve(boolean bCopyArgs, byte[] p_arr, byte[] a_arr, byte[] b_arr, byte[] G_arr, byte[] r_arr, short k) {
             short bitlength = (short) (p_arr.length * 8);
-            if(OperationSupport.getInstance().PRECISE_CURVE_BITLENGTH) {
+            if (OperationSupport.getInstance().PRECISE_CURVE_BITLENGTH) {
                 for (short i = 0; i < p_arr.length; ++i) {
                     bitlength -= 8;
                     if (p_arr[i] != (byte) 0x00) {
@@ -857,6 +849,7 @@ public class jcmathlib {
             this.pBN = new Bignat(this.p, null);
             this.aBN = new Bignat(this.a, null);
             this.bBN = new Bignat(this.b, null);
+            this.rBN = new Bignat(this.r, null);
 
             this.disposable_pair = this.newKeyPair(null);
             this.disposable_priv = (ECPrivateKey) this.disposable_pair.getPrivate();
@@ -880,21 +873,13 @@ public class jcmathlib {
             ECPrivateKey privKey;
             ECPublicKey pubKey;
             if (existingKeyPair == null) { // Allocate if not supplied
-                existingKeyPair = new KeyPair(KeyPair.ALG_EC_FP, KEY_LENGTH);
-            }
-
-            // Some implementation will not return valid pub key until ecKeyPair.genKeyPair() is called
-            // Other implementation will fail with exception if same is called => try catch and drop any exception
-            try {
+                privKey = (ECPrivateKey) KeyBuilder.buildKey(KeyBuilder.TYPE_EC_FP_PRIVATE, KEY_LENGTH, false);
+                pubKey = (ECPublicKey) KeyBuilder.buildKey(KeyBuilder.TYPE_EC_FP_PUBLIC, KEY_LENGTH, false);
+                existingKeyPair = new KeyPair(pubKey, privKey);//new KeyPair(KeyPair.ALG_EC_FP, KEY_LENGTH);
+            } else {
+                privKey = (ECPrivateKey) existingKeyPair.getPrivate();
                 pubKey = (ECPublicKey) existingKeyPair.getPublic();
-                if (pubKey == null) {
-                    existingKeyPair.genKeyPair();
-                }
-            } catch (Exception e) {
-            } // intentionally do nothing
-
-            privKey = (ECPrivateKey) existingKeyPair.getPrivate();
-            pubKey = (ECPublicKey) existingKeyPair.getPublic();
+            }
 
             // Set required values
             privKey.setFieldFP(p, (short) 0, (short) p.length);
@@ -911,7 +896,8 @@ public class jcmathlib {
             pubKey.setR(r, (short) 0, (short) r.length);
             //pubKey.setK(k);
 
-            existingKeyPair.genKeyPair();
+            privKey.setS(Bignat_Helper.CONST_ONE, (short) 0, (short) 1);
+            pubKey.setW(G, (short) 0, (short) G.length);
 
             return existingKeyPair;
         }
@@ -3346,6 +3332,19 @@ public class jcmathlib {
                 }
             }
             return carry == (byte) 0x01;
+        }
+
+        public void shift_bits_right_3() {
+            byte carry = 0;
+
+            for(short i = (short)(this.size - 1); i >= 1; i--)
+            {
+                carry = (byte)((byte)(((this.value[(short)(i - 1)] & 0x7) << 5)) & (byte)0xE0);
+                this.value[i] = (byte)((byte)(this.value[i] >> 3) & (byte)0x1F);
+                this.value[i] |= carry;
+            }
+
+            this.value[0] = (byte)((byte)(this.value[0] >> 3) & (byte)0x1F);
         }
 
         public void sw_mod_exp(Bignat exponent, Bignat modulo) {

@@ -7,12 +7,13 @@ import applet.jcmathlib.*;
 public class MainApplet extends Applet implements MultiSelectable {
 	private ECConfig ecc;
 	private ECCurve curve;
-	private Bignat curveOrder, privateKey, privateNonce, signature;
-	private Bignat transformC, transformA3, transformX, transformY;
-	private ECPoint publicKey, publicNonce;
+	private Bignat privateKey, privateNonce, signature;
+	private Bignat transformC, transformA3, transformX, transformY, eight;
+	private ECPoint point;
 
 	private byte[] masterKey = new byte[32];
 	private byte[] prefix = new byte[32];
+	private byte[] publicKey = new byte[32];
 
 	private MessageDigest hasher = MessageDigest.getInstance(MessageDigest.ALG_SHA_512, false);
 
@@ -24,28 +25,26 @@ public class MainApplet extends Applet implements MultiSelectable {
 	}
 
 	public MainApplet(byte[] buffer, short offset, byte length) {
-	    OperationSupport os = OperationSupport.getInstance();
-	    os.setCard(OperationSupport.SIMULATOR);
+		OperationSupport os = OperationSupport.getInstance();
+		os.setCard(OperationSupport.SIMULATOR);
 
 		ecc = new ECConfig((short) 256);
 
-		curveOrder = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
 		privateKey = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
-		privateNonce = new Bignat((short) 64, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
-		signature = new Bignat((short) 64, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
 
-		transformC = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
-		transformA3 = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
-		transformX = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
-		transformY = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
+		privateNonce = new Bignat((short) 64, JCSystem.MEMORY_TYPE_TRANSIENT_DESELECT, ecc.bnh);
+		signature = new Bignat((short) 64, JCSystem.MEMORY_TYPE_TRANSIENT_DESELECT, ecc.bnh);
 
-		curveOrder.from_byte_array(Wei25519.r);
-		transformC.from_byte_array(Consts.TRANSFORM_C);
-		transformA3.from_byte_array(Consts.TRANSFORM_A3);
+		transformC = new Bignat(Consts.TRANSFORM_C, null);
+		transformA3 = new Bignat(Consts.TRANSFORM_A3, null);
+		transformX = new Bignat((short) 32, JCSystem.MEMORY_TYPE_TRANSIENT_RESET, ecc.bnh);
+		transformY = new Bignat((short) 32, JCSystem.MEMORY_TYPE_TRANSIENT_RESET, ecc.bnh);
 
-		curve = new ECCurve(true, Wei25519.p, Wei25519.a, Wei25519.b, Wei25519.G, Wei25519.r, Wei25519.k);
-		publicKey = new ECPoint(curve, ecc.ech);
-		publicNonce = new ECPoint(curve, ecc.ech);
+		eight = new Bignat(Consts.EIGHT, null);
+
+		curve = new ECCurve(false, Wei25519.p, Wei25519.a, Wei25519.b, Wei25519.G, Wei25519.r, Wei25519.k);
+		point = new ECPoint(curve, ecc.ech);
+
 
 		register();
 	}
@@ -63,7 +62,6 @@ public class MainApplet extends Applet implements MultiSelectable {
 					case Consts.INS_SIGN:
 						sign(apdu);
 						break;
-
 					default:
 						ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
 				}
@@ -117,10 +115,15 @@ public class MainApplet extends Applet implements MultiSelectable {
 		Util.arrayCopyNonAtomic(ramArray, (short) 32, prefix, (short) 0, (short) 32);
 
 		privateKey.from_byte_array((short) 32, (short) 0, ramArray, (short) 0);
-		publicKey.setW(curve.G, (short) 0, curve.POINT_SIZE);
-		publicKey.multiplication(privateKey);
+		privateKey.shift_bits_right_3(); // Required by smartcards (scalar must be lesser than r)
+		point.setW(curve.G, (short) 0, curve.POINT_SIZE);
+		point.multiplication(privateKey);
+		point.multiplication(eight); // Compensate bit shift
 
-		encodeEd25519(publicKey, apduBuffer, (short) 0);
+		privateKey.from_byte_array((short) 32, (short) 0, ramArray, (short) 0);
+		encodeEd25519(point, publicKey, (short) 0);
+
+		Util.arrayCopyNonAtomic(publicKey, (short) 0, apduBuffer, (short) 0, (short) 32);
 		apdu.setOutgoingAndSend((short) 0, (short) 32);
 	}
 
@@ -130,28 +133,27 @@ public class MainApplet extends Applet implements MultiSelectable {
 		// Generate nonce R
         deterministicNonce(apduBuffer, ISO7816.OFFSET_CDATA, (short) 32);
 		// randomNonce();
-		publicNonce.setW(Wei25519.G, (short) 0, Wei25519.POINT_SIZE);
-		publicNonce.multiplication(privateNonce);
+		point.setW(curve.G, (short) 0, curve.POINT_SIZE);
+		point.multiplication(privateNonce);
 
 		// Compute challenge e
 		hasher.reset();
-		encodeEd25519(publicNonce, ramArray, (short) 0);
+		encodeEd25519(point, ramArray, (short) 0);
 		hasher.update(ramArray, (short) 0, curve.COORD_SIZE); // R
-		encodeEd25519(publicKey, ramArray, (short) 0);
-		hasher.update(ramArray, (short) 0, curve.COORD_SIZE); // A
-		hasher.doFinal(apduBuffer, ISO7816.OFFSET_CDATA, (short) 32, ramArray, (short) 0); // m
-		changeEndianity(ramArray, (short) 0, (short) 64);
+		hasher.update(publicKey, (short) 0, curve.COORD_SIZE); // A
+		hasher.doFinal(apduBuffer, ISO7816.OFFSET_CDATA, (short) 32, apduBuffer, (short) 0); // m
+		changeEndianity(apduBuffer, (short) 0, (short) 64);
 		signature.set_size((short) 64);
-		signature.from_byte_array((short) 64, (short) 0, ramArray, (short) 0);
-		signature.mod(curveOrder);
+		signature.from_byte_array((short) 64, (short) 0, apduBuffer, (short) 0);
+		signature.mod(curve.rBN);
 		signature.deep_resize((short) 32);
 
 		// Compute signature s = r + ex
-		signature.mod_mult(privateKey, signature, curveOrder);
-		signature.mod_add(privateNonce, curveOrder);
+		signature.mod_mult(privateKey, signature, curve.rBN);
+		signature.mod_add(privateNonce, curve.rBN);
 
 		// Return signature (R, s)
-		encodeEd25519(publicNonce, apduBuffer, (short) 0);
+		Util.arrayCopyNonAtomic(ramArray, (short) 0, apduBuffer, (short) 0, curve.COORD_SIZE);
 		signature.prepend_zeros(curve.COORD_SIZE, apduBuffer, curve.COORD_SIZE);
 		changeEndianity(apduBuffer, curve.COORD_SIZE, curve.COORD_SIZE);
 
@@ -205,13 +207,7 @@ public class MainApplet extends Applet implements MultiSelectable {
 		changeEndianity(ramArray, (short) 0, (short) 64);
 		privateNonce.set_size((short) 64);
 		privateNonce.from_byte_array((short) 64, (short) 0, ramArray, (short) 0);
-		privateNonce.mod(curveOrder);
+		privateNonce.mod(curve.rBN);
 		privateNonce.deep_resize((short) 32);
-	}
-
-	private void randomNonce() {
-		random.generateData(ramArray, (short) 0,(short) 32);
-		privateNonce.set_size((short) 32);
-		privateNonce.from_byte_array((short) 32, (short) 0, ramArray, (short) 0);
 	}
 }
