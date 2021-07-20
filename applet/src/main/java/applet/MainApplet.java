@@ -3,6 +3,7 @@ package applet;
 import javacard.framework.*;
 import javacard.security.*;
 import applet.jcmathlib.*;
+import applet.swalgs.*;
 
 public class MainApplet extends Applet implements MultiSelectable {
 	private ECConfig ecc;
@@ -15,7 +16,7 @@ public class MainApplet extends Applet implements MultiSelectable {
 	private byte[] prefix = new byte[32];
 	private byte[] publicKey = new byte[32];
 
-	private MessageDigest hasher = MessageDigest.getInstance(MessageDigest.ALG_SHA_512, false);
+	private MessageDigest hasher;
 
 	private byte[] ramArray = JCSystem.makeTransientByteArray(Wei25519.POINT_SIZE, JCSystem.CLEAR_ON_DESELECT);
 	private RandomData random = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
@@ -27,6 +28,12 @@ public class MainApplet extends Applet implements MultiSelectable {
 	public MainApplet(byte[] buffer, short offset, byte length) {
 		OperationSupport os = OperationSupport.getInstance();
 		os.setCard(OperationSupport.SIMULATOR);
+
+		try {
+			hasher = MessageDigest.getInstance(MessageDigest.ALG_SHA_512, false);
+		} catch (CryptoException e) {
+			hasher = new Sha2(Sha2.SHA_512);
+		}
 
 		ecc = new ECConfig((short) 256);
 
