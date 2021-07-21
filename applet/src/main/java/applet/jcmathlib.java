@@ -787,8 +787,6 @@ public class jcmathlib {
         public KeyPair disposable_pair;
         public ECPrivateKey disposable_priv;
 
-
-
         /**
          * Creates new curve object from provided parameters. Either copy of provided
          * arrays is performed (bCopyArgs == true, input arrays can be reused later for other
@@ -875,7 +873,7 @@ public class jcmathlib {
             if (existingKeyPair == null) { // Allocate if not supplied
                 privKey = (ECPrivateKey) KeyBuilder.buildKey(KeyBuilder.TYPE_EC_FP_PRIVATE, KEY_LENGTH, false);
                 pubKey = (ECPublicKey) KeyBuilder.buildKey(KeyBuilder.TYPE_EC_FP_PUBLIC, KEY_LENGTH, false);
-                existingKeyPair = new KeyPair(pubKey, privKey);//new KeyPair(KeyPair.ALG_EC_FP, KEY_LENGTH);
+                existingKeyPair = new KeyPair(pubKey, privKey);
             } else {
                 privKey = (ECPrivateKey) existingKeyPair.getPrivate();
                 pubKey = (ECPublicKey) existingKeyPair.getPublic();
@@ -1532,46 +1530,6 @@ public class jcmathlib {
                 (byte) 0x5c, (byte) 0xf5, (byte) 0xd3, (byte) 0xed
         };
     }
-
-    public static class SecP256r1 {
-
-        public final static short KEY_LENGTH = 256;//Bits
-        public final static short POINT_SIZE = 65; //Bytes
-        public final static short COORD_SIZE = 32; //Bytes
-
-        public final static byte[] p = { (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, 0x00, 0x00,
-                0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, (byte) 0xff,
-                (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff,
-                (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff };
-
-
-        public final static byte[] a = { (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, 0x00, 0x00,
-                0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, (byte) 0xff,
-                (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff,
-                (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xfc};
-
-        public final static byte[] b = { 0x5a, (byte) 0xc6, 0x35, (byte) 0xd8, (byte) 0xaa, 0x3a,
-                (byte) 0x93, (byte) 0xe7, (byte) 0xb3, (byte) 0xeb, (byte) 0xbd, 0x55, 0x76, (byte) 0x98,
-                (byte) 0x86, (byte) 0xbc, 0x65, 0x1d, 0x06, (byte) 0xb0, (byte) 0xcc, 0x53, (byte) 0xb0,
-                (byte) 0xf6, 0x3b, (byte) 0xce, 0x3c, 0x3e, 0x27, (byte) 0xd2, 0x60, 0x4b };
-
-        public final static byte[] G = { 0x04, 0x6b, 0x17, (byte) 0xd1, (byte) 0xf2, (byte) 0xe1, 0x2c,
-                0x42, 0x47, (byte) 0xf8, (byte) 0xbc, (byte) 0xe6, (byte) 0xe5, 0x63, (byte) 0xa4, 0x40,
-                (byte) 0xf2, 0x77, 0x03, 0x7d, (byte) 0x81, 0x2d, (byte) 0xeb, 0x33, (byte) 0xa0, (byte) 0xf4,
-                (byte) 0xa1, 0x39, 0x45, (byte) 0xd8, (byte) 0x98, (byte) 0xc2, (byte) 0x96, 0x4f, (byte) 0xe3,
-                0x42, (byte) 0xe2, (byte) 0xfe, 0x1a, 0x7f, (byte) 0x9b, (byte) 0x8e, (byte) 0xe7, (byte) 0xeb,
-                0x4a, 0x7c, 0x0f, (byte) 0x9e, 0x16, 0x2b, (byte) 0xce, 0x33, 0x57, 0x6b, 0x31, 0x5e,
-                (byte) 0xce, (byte) 0xcb, (byte) 0xb6, 0x40, 0x68, 0x37, (byte) 0xbf, 0x51, (byte) 0xf5 };
-
-        public final static byte[] r = { (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, 0x00, 0x00, 0x00,
-                0x00, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff,
-                (byte) 0xff, (byte) 0xbc, (byte) 0xe6, (byte) 0xfa, (byte) 0xad, (byte) 0xa7, 0x17, (byte) 0x9e,
-                (byte) 0x84, (byte) 0xf3, (byte) 0xb9, (byte) 0xca, (byte) 0xc2, (byte) 0xfc, 0x63, 0x25, 0x51 };
-    }
-    /**
-     * Credits: Based on Bignat library from OV-chip project https://ovchip.cs.ru.nl/OV-chip_2.0 by Radboud University Nijmegen
-     */
-
 
     /**
      *
@@ -3485,7 +3443,6 @@ public class jcmathlib {
             bnh.fnc_NmodE_cipher.init(bnh.fnc_NmodE_pubKey, Cipher.MODE_DECRYPT);
             base.prepend_zeros(baseLen, bnh.fnc_deep_resize_tmp, (short) 0);
             // BUGBUG: Check if input is not all zeroes (causes out-of-bound exception on some cards)
-            // TODO THIS RUINS EVERYHING!
             short len = bnh.fnc_NmodE_cipher.doFinal(bnh.fnc_deep_resize_tmp, (short) 0, baseLen, resultArray, resultOffset);
             bnh.unlock(bnh.fnc_deep_resize_tmp);
             return len;
@@ -3592,77 +3549,6 @@ public class jcmathlib {
         }
     }
 
-    static class SecP256k1 {
-
-        public final static short KEY_LENGTH = 256; // Bits
-        public final static short POINT_SIZE = 65; // Bytes
-        public final static short COORD_SIZE = 32; // Bytes
-
-        public final static byte[] p = {
-                (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff,
-                (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff,
-                (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff,
-                (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff,
-                (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff,
-                (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff,
-                (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xfe,
-                (byte) 0xff, (byte) 0xff, (byte) 0xfc, (byte) 0x2f
-        };
-
-        public final static byte[] a = {
-                (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
-                (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
-                (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
-                (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
-                (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
-                (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
-                (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
-                (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00
-        };
-
-        public final static byte[] b = {
-                (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
-                (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
-                (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
-                (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
-                (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
-                (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
-                (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
-                (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x07
-        };
-
-        public final static byte[] G = {
-                (byte) 0x04,
-                (byte) 0x79, (byte) 0xbe, (byte) 0x66, (byte) 0x7e,
-                (byte) 0xf9, (byte) 0xdc, (byte) 0xbb, (byte) 0xac,
-                (byte) 0x55, (byte) 0xa0, (byte) 0x62, (byte) 0x95,
-                (byte) 0xce, (byte) 0x87, (byte) 0x0b, (byte) 0x07,
-                (byte) 0x02, (byte) 0x9b, (byte) 0xfc, (byte) 0xdb,
-                (byte) 0x2d, (byte) 0xce, (byte) 0x28, (byte) 0xd9,
-                (byte) 0x59, (byte) 0xf2, (byte) 0x81, (byte) 0x5b,
-                (byte) 0x16, (byte) 0xf8, (byte) 0x17, (byte) 0x98,
-                (byte) 0x48, (byte) 0x3a, (byte) 0xda, (byte) 0x77,
-                (byte) 0x26, (byte) 0xa3, (byte) 0xc4, (byte) 0x65,
-                (byte) 0x5d, (byte) 0xa4, (byte) 0xfb, (byte) 0xfc,
-                (byte) 0x0e, (byte) 0x11, (byte) 0x08, (byte) 0xa8,
-                (byte) 0xfd, (byte) 0x17, (byte) 0xb4, (byte) 0x48,
-                (byte) 0xa6, (byte) 0x85, (byte) 0x54, (byte) 0x19,
-                (byte) 0x9c, (byte) 0x47, (byte) 0xd0, (byte) 0x8f,
-                (byte) 0xfb, (byte) 0x10, (byte) 0xd4, (byte) 0xb8
-        };
-
-        public final static byte[] r = {
-                (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff,
-                (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff,
-                (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff,
-                (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xfe,
-                (byte) 0xba, (byte) 0xae, (byte) 0xdc, (byte) 0xe6,
-                (byte) 0xaf, (byte) 0x48, (byte) 0xa0, (byte) 0x3b,
-                (byte) 0xbf, (byte) 0xd2, (byte) 0x5e, (byte) 0x8c,
-                (byte) 0xd0, (byte) 0x36, (byte) 0x41, (byte) 0x41,
-        };
-    }
-
     /**
      *
      * @author Petr Svenda
@@ -3742,7 +3628,6 @@ public class jcmathlib {
             return rm.memAlloc.allocateByteArray(length, allocatorType);
         }
     }
-
 
     /**
      *

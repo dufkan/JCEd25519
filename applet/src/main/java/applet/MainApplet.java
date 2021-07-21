@@ -144,7 +144,6 @@ public class MainApplet extends Applet implements MultiSelectable {
 
 		// Generate nonce R
         deterministicNonce(apduBuffer, ISO7816.OFFSET_CDATA, (short) 32);
-		// randomNonce();
 		point.setW(curve.G, (short) 0, curve.POINT_SIZE);
 		point.multiplication(privateNonce);
 
