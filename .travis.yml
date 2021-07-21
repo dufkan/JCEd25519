@@ -1,6 +1,0 @@
-language: java
-jdk: oraclejdk11
-script:
-  - ./gradlew check --info
-  - ./gradlew buildJavaCard --info
-
