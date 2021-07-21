@@ -1,4 +1,24 @@
-package applet;
+/*
+JCEd25519 is an applet for creating Ed25519 signatures using JC API.
+Copyright (C) 2021 Antonín Dufka
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+package jced25519;
+
+import javacard.security.KeyAgreement;
 
 public class OperationSupport {
     private static OperationSupport instance;
@@ -46,6 +66,25 @@ public class OperationSupport {
     }
 
     public void setAutomatically() {
-        // TODO test operations using try-catch
+        ECDH_XY = testECDHXY();
+        ECDH_X_ONLY = testECDHX();
+    }
+
+    private boolean testECDHXY() {
+        try {
+            KeyAgreement.getInstance(jcmathlib.ECPoint_Helper.ALG_EC_SVDP_DH_PLAIN_XY, false);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private boolean testECDHX() {
+        try {
+            KeyAgreement.getInstance(jcmathlib.ECPoint_Helper.ALG_EC_SVDP_DH_PLAIN, false);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 }

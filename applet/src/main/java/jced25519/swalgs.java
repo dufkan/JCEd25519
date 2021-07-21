@@ -1,4 +1,4 @@
-package applet;
+package jced25519;
 
 import javacard.framework.*;
 import javacard.security.*;

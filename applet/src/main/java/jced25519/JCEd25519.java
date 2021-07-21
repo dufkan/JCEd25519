@@ -1,11 +1,30 @@
-package applet;
+/*
+JCEd25519 is an applet for creating Ed25519 signatures using JC API.
+Copyright (C) 2021 Antonín Dufka
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+
+package jced25519;
 
 import javacard.framework.*;
 import javacard.security.*;
-import applet.jcmathlib.*;
-import applet.swalgs.*;
+import jced25519.jcmathlib.*;
+import jced25519.swalgs.*;
 
-public class MainApplet extends Applet implements MultiSelectable {
+public class JCEd25519 extends Applet implements MultiSelectable {
 	private ECConfig ecc;
 	private ECCurve curve;
 	private Bignat privateKey, privateNonce, signature;
@@ -22,10 +41,10 @@ public class MainApplet extends Applet implements MultiSelectable {
 	private RandomData random = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
 
 	public static void install(byte[] bArray, short bOffset, byte bLength) {
-		new MainApplet(bArray, bOffset, bLength);
+		new JCEd25519(bArray, bOffset, bLength);
 	}
 
-	public MainApplet(byte[] buffer, short offset, byte length) {
+	public JCEd25519(byte[] buffer, short offset, byte length) {
 		OperationSupport os = OperationSupport.getInstance();
 		os.setCard(OperationSupport.SIMULATOR);
 

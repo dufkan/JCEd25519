@@ -1,6 +1,6 @@
 // Merged file class by JavaPresso (https://github.com/petrs/JavaPresso)
 
-package applet;
+package jced25519;
 
 import javacard.framework.ISOException;
 import javacard.framework.JCSystem;

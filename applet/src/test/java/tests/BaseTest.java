@@ -1,6 +1,6 @@
 package tests;
 
-import applet.MainApplet;
+import jced25519.JCEd25519;
 import cz.muni.fi.crocs.rcard.client.CardManager;
 import cz.muni.fi.crocs.rcard.client.CardType;
 import cz.muni.fi.crocs.rcard.client.RunConfig;
@@ -18,7 +18,7 @@ import java.util.ArrayList;
  * @author Petr Svenda, Dusan Klinec (ph4r05)
  */
 public class BaseTest {
-    private static String APPLET_AID = "01ffff0405060708090102";
+    private static String APPLET_AID = "6a6365643235353139617070";
     private static byte APPLET_AID_BYTE[] = Util.hexStringToByteArray(APPLET_AID);
 
     protected CardType cardType = CardType.JCARDSIMLOCAL;
@@ -64,6 +64,8 @@ public class BaseTest {
         // System.setProperty("com.licel.jcardsim.randomdata.secure", "1");
 
         runCfg.setTestCardType(cardType);
+        runCfg.setTargetReaderIndex(2);
+
         if (cardType == CardType.REMOTE){
             runCfg.setRemoteAddress("http://127.0.0.1:9901");
 
@@ -74,7 +76,7 @@ public class BaseTest {
 
         } else if (cardType != CardType.PHYSICAL && cardType != CardType.PHYSICAL_JAVAX) {
             // Running in the simulator
-            runCfg.setAppletToSimulate(MainApplet.class)
+            runCfg.setAppletToSimulate(JCEd25519.class)
                     .setTestCardType(CardType.JCARDSIMLOCAL)
                     .setbReuploadApplet(true)
                     .setInstallData(installData);
