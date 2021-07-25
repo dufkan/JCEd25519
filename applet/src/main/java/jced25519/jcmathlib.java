@@ -25,12 +25,10 @@ public class jcmathlib {
         // Selected constants missing from older JC API specs
         public static final byte ALG_EC_SVDP_DH_PLAIN = (byte) 3;
         public static final byte ALG_EC_SVDP_DH_PLAIN_XY = (byte) 6;
-        public static final byte ALG_ECDSA_SHA_256 = (byte) 33;
 
         byte[] uncompressed_point_arr1;
         byte[] uncompressed_point_arr2;
         byte[] fnc_isEqual_hashArray;
-        byte[] fnc_multiplication_resultArray;
 
         // These Bignats are just pointing to some helperEC_BN_? so reasonable naming is preserved yet no need to actually allocated whole Bignat object
         Bignat fnc_add_x_r; // frequent write
@@ -45,12 +43,14 @@ public class jcmathlib {
         Bignat fnc_multiplication_x; // result write
         Bignat fnc_multiplication_y_sq; // frequent write
         Bignat fnc_multiplication_scalar; // write once, read
-        Bignat fnc_multiplication_y1; // mostly just read, write inside sqrt_FP
-        Bignat fnc_multiplication_y2; // mostly just read, result write
+        Bignat fnc_multiplication_y; // mostly just read, write inside sqrt_FP
+        Bignat fnc_multiplication_tmp;
+        Bignat fnc_multiplication_lambda;
+        Bignat fnc_multiplication_denominator;
+
         Bignat fnc_negate_yBN; // mostly just read, result write
 
         KeyAgreement multKA;
-        Signature    fnc_SignVerifyECDSA_signEngine;
         MessageDigest fnc_isEqual_hashEngine;
 
         public ECPoint_Helper(ResourceManager rm) {
@@ -61,7 +61,6 @@ public class jcmathlib {
             } else if(OperationSupport.getInstance().ECDH_X_ONLY) {
                 multKA = KeyAgreement.getInstance(ALG_EC_SVDP_DH_PLAIN, false);
             }
-            fnc_SignVerifyECDSA_signEngine = Signature.getInstance(ALG_ECDSA_SHA_256, false);
         }
 
         void initialize() {
@@ -82,9 +81,10 @@ public class jcmathlib {
             fnc_multiplication_scalar = rm.helperEC_BN_F;
             fnc_multiplication_x = rm.helperEC_BN_B;
             fnc_multiplication_y_sq = rm.helperEC_BN_C;
-            fnc_multiplication_y1 = rm.helperEC_BN_D;
-            fnc_multiplication_y2 = rm.helperEC_BN_B;
-            fnc_multiplication_resultArray = rm.helper_BN_array1;
+            fnc_multiplication_y = rm.helperEC_BN_D;
+            fnc_multiplication_tmp = rm.helperEC_BN_E;
+            fnc_multiplication_lambda = rm.helperEC_BN_F;
+            fnc_multiplication_denominator = rm.helperEC_BN_G;
 
             fnc_negate_yBN = rm.helperEC_BN_C;
 
@@ -378,7 +378,7 @@ public class jcmathlib {
             ech.fnc_add_y_p.unlock();
 
             ech.lock(ech.uncompressed_point_arr1);
-            ech.uncompressed_point_arr1[0] = (byte)0x04;
+            ech.uncompressed_point_arr1[0] = (byte) 0x04;
             // If x_r.length() and y_r.length() is smaller than this.TheCurve.COORD_SIZE due to leading zeroes which were shrinked before, then we must add these back
             ech.fnc_add_x_r.prepend_zeros(this.theCurve.COORD_SIZE, ech.uncompressed_point_arr1, (short) 1);
             ech.fnc_add_x_r.unlock();
@@ -456,6 +456,7 @@ public class jcmathlib {
             ech.fnc_multiplication_x.lock();
             short len = this.multiplication_x_KA(scalar, ech.fnc_multiplication_x.as_byte_array(), (short) 0);
             ech.fnc_multiplication_x.set_size(len);
+
             //Y^2 = X^3 + XA + B = x(x^2+A)+B
             ech.fnc_multiplication_y_sq.lock();
             ech.fnc_multiplication_y_sq.clone(ech.fnc_multiplication_x);
@@ -463,33 +464,64 @@ public class jcmathlib {
             ech.fnc_multiplication_y_sq.mod_add(this.theCurve.aBN, this.theCurve.pBN);
             ech.fnc_multiplication_y_sq.mod_mult(ech.fnc_multiplication_y_sq, ech.fnc_multiplication_x, this.theCurve.pBN);
             ech.fnc_multiplication_y_sq.mod_add(this.theCurve.bBN, this.theCurve.pBN);
-            ech.fnc_multiplication_y1.lock();
-            ech.fnc_multiplication_y1.clone(ech.fnc_multiplication_y_sq);
+            ech.fnc_multiplication_y.lock();
+            ech.fnc_multiplication_y.clone(ech.fnc_multiplication_y_sq);
             ech.fnc_multiplication_y_sq.unlock();
-            ech.fnc_multiplication_y1.sqrt_FP(this.theCurve.pBN);
+            ech.fnc_multiplication_y.sqrt_FP(this.theCurve.pBN);
 
             // Construct public key with <x, y_1>
-            ech.lock(ech.uncompressed_point_arr1);
-            ech.uncompressed_point_arr1[0] = 0x04;
-            ech.fnc_multiplication_x.prepend_zeros(this.theCurve.COORD_SIZE, ech.uncompressed_point_arr1, (short) 1);
+            ech.lock(ech.uncompressed_point_arr2);
+            ech.uncompressed_point_arr2[0] = 0x04;
+            ech.fnc_multiplication_x.prepend_zeros(this.theCurve.COORD_SIZE, ech.uncompressed_point_arr2, (short) 1);
             ech.fnc_multiplication_x.unlock();
-            ech.fnc_multiplication_y1.prepend_zeros(this.theCurve.COORD_SIZE, ech.uncompressed_point_arr1, (short) (1 + theCurve.COORD_SIZE));
-            this.setW(ech.uncompressed_point_arr1, (short) 0, theCurve.POINT_SIZE); //So that we can convert to pub key
+            ech.fnc_multiplication_y.prepend_zeros(this.theCurve.COORD_SIZE, ech.uncompressed_point_arr2, (short) (1 + theCurve.COORD_SIZE));
+            ech.fnc_multiplication_y.unlock();
 
-            // Check if public point <x, y_1> corresponds to the "secret" (i.e., our scalar)
-            ech.lock(ech.fnc_multiplication_resultArray);
-            if (!SignVerifyECDSA(this.theCurve.bignatAsPrivateKey(scalar), this.asPublicKey(), this.ech.fnc_SignVerifyECDSA_signEngine, ech.fnc_multiplication_resultArray)) { //If verification fails, then pick the <x, y_2>
-                ech.fnc_multiplication_y2.lock();
-                ech.fnc_multiplication_y2.clone(this.theCurve.pBN); //y_2 = p - y_1
-                ech.fnc_multiplication_y2.mod_sub(ech.fnc_multiplication_y1, this.theCurve.pBN);
-                ech.fnc_multiplication_y2.copy_to_buffer(ech.uncompressed_point_arr1, (short) (1 + theCurve.COORD_SIZE));
-                ech.fnc_multiplication_y2.unlock();
-            }
-            ech.unlock(ech.fnc_multiplication_resultArray);
-            ech.fnc_multiplication_y1.unlock();
+            // Check that (<x, y> + P)_x == ((scalar + 1)P)_x
+            ech.fnc_multiplication_x.lock();
+            scalar.increment_one();
+            len = this.multiplication_x_KA(scalar, ech.fnc_multiplication_x.as_byte_array(), (short) 0);
+            ech.fnc_multiplication_x.set_size(len);
+            scalar.decrement_one(); // keep the original
 
-            this.setW(ech.uncompressed_point_arr1, (short)0, theCurve.POINT_SIZE);
+            ech.lock(ech.uncompressed_point_arr1);
+            this.getW(ech.uncompressed_point_arr1, (short) 0);
+
+            // y_1 - y_2
+            ech.fnc_multiplication_lambda.lock();
+            ech.fnc_multiplication_lambda.from_byte_array(theCurve.COORD_SIZE, (short) 0, ech.uncompressed_point_arr2, (short) (1 + theCurve.COORD_SIZE));
+            ech.fnc_multiplication_tmp.lock();
+            ech.fnc_multiplication_tmp.from_byte_array(theCurve.COORD_SIZE, (short) 0, ech.uncompressed_point_arr1, (short) (1 + theCurve.COORD_SIZE));
+            ech.fnc_multiplication_lambda.mod_sub(ech.fnc_multiplication_tmp, theCurve.pBN);
+
+            // (x_1 - x_2)^-1
+            ech.fnc_multiplication_denominator.from_byte_array(theCurve.COORD_SIZE, (short) 0, ech.uncompressed_point_arr2, (short) 1);
+            ech.fnc_multiplication_tmp.from_byte_array(theCurve.COORD_SIZE, (short) 0, ech.uncompressed_point_arr1, (short) 1);
+            ech.fnc_multiplication_denominator.mod_sub(ech.fnc_multiplication_tmp, theCurve.pBN);
+            ech.fnc_multiplication_denominator.mod_inv(theCurve.pBN);
+            ech.fnc_multiplication_denominator.deep_resize(theCurve.COORD_SIZE);
+
+            // λ = (y_1 - y_2)/(x_1 - x_2)
+            ech.fnc_multiplication_lambda.mod_mult(ech.fnc_multiplication_lambda, ech.fnc_multiplication_denominator, theCurve.pBN);
+
+            // x_3 = λ^2 - x_1 - x_2
+            ech.fnc_multiplication_lambda.mod_mult(ech.fnc_multiplication_lambda, ech.fnc_multiplication_lambda, theCurve.pBN);
+            ech.fnc_multiplication_tmp.from_byte_array(theCurve.COORD_SIZE, (short) 0, ech.uncompressed_point_arr2, (short) 1);
+            ech.fnc_multiplication_lambda.mod_sub(ech.fnc_multiplication_tmp, theCurve.pBN);
+            ech.fnc_multiplication_tmp.from_byte_array(theCurve.COORD_SIZE, (short) 0, ech.uncompressed_point_arr1, (short) 1);
             ech.unlock(ech.uncompressed_point_arr1);
+            ech.fnc_multiplication_lambda.mod_sub(ech.fnc_multiplication_tmp, theCurve.pBN);
+            ech.fnc_multiplication_tmp.unlock();
+
+            this.setW(ech.uncompressed_point_arr2, (short) 0, theCurve.POINT_SIZE);
+
+            // If <x, y_1> + P != (scalar + 1)P, negate the point
+            if(!ech.fnc_multiplication_lambda.same_value(ech.fnc_multiplication_x))
+                this.negate();
+            ech.fnc_multiplication_lambda.unlock();
+            ech.fnc_multiplication_x.unlock();
+
+            ech.unlock(ech.uncompressed_point_arr2);
         }
 
 
@@ -1332,6 +1364,7 @@ public class jcmathlib {
         Bignat helperEC_BN_D;
         Bignat helperEC_BN_E;
         Bignat helperEC_BN_F;
+        Bignat helperEC_BN_G;
 
         public void initialize(short MAX_POINT_SIZE, short MAX_COORD_SIZE, short MAX_BIGNAT_SIZE, short MULT_RSA_ENGINE_MAX_LENGTH_BITS, Bignat_Helper bnh) {
             // Allocate long-term helper values
@@ -1372,8 +1405,7 @@ public class jcmathlib {
             helperEC_BN_D = new Bignat(MAX_COORD_SIZE, memAlloc.getAllocatorType(ObjectAllocator.ECPH_helperEC_BN_D), bnh);
             helperEC_BN_E = new Bignat(MAX_COORD_SIZE, memAlloc.getAllocatorType(ObjectAllocator.ECPH_helperEC_BN_E), bnh);
             helperEC_BN_F = new Bignat(MAX_COORD_SIZE, memAlloc.getAllocatorType(ObjectAllocator.ECPH_helperEC_BN_F), bnh);
-
-
+            helperEC_BN_G = new Bignat(MAX_COORD_SIZE, memAlloc.getAllocatorType(ObjectAllocator.ECPH_helperEC_BN_G), bnh);
         }
 
         /**
@@ -1423,6 +1455,9 @@ public class jcmathlib {
             if (helper_BN_F.isLocked()) {
                 helper_BN_F.unlock();
             }
+            if (helper_BN_G.isLocked()) {
+                helper_BN_G.unlock();
+            }
 
             if (helperEC_BN_A.isLocked()) {
                 helperEC_BN_A.unlock();
@@ -1441,6 +1476,9 @@ public class jcmathlib {
             }
             if (helperEC_BN_F.isLocked()) {
                 helperEC_BN_F.unlock();
+            }
+            if (helperEC_BN_G.isLocked()) {
+                helperEC_BN_G.unlock();
             }
             if (locker.isLocked(helper_uncompressed_point_arr1)) {
                 locker.unlock(helper_uncompressed_point_arr1);
@@ -4121,9 +4159,10 @@ public class jcmathlib {
         public static final byte ECPH_helperEC_BN_D      = 12;
         public static final byte ECPH_helperEC_BN_E      = 13;
         public static final byte ECPH_helperEC_BN_F      = 14;
-        public static final byte ECPH_uncompressed_point_arr1 = 15;
-        public static final byte ECPH_uncompressed_point_arr2 = 16;
-        public static final byte ECPH_hashArray          = 17;
+        public static final byte ECPH_helperEC_BN_G      = 15;
+        public static final byte ECPH_uncompressed_point_arr1 = 16;
+        public static final byte ECPH_uncompressed_point_arr2 = 17;
+        public static final byte ECPH_hashArray          = 18;
 
         public static final short ALLOCATOR_TYPE_ARRAY_LENGTH = (short) (ECPH_hashArray + 1);
 
