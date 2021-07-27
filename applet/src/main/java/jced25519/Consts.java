@@ -23,6 +23,10 @@ public class Consts {
     public static final byte INS_KEYGEN = (byte) 0xD0;
     public static final byte INS_SIGN = (byte) 0xD1;
     public static final byte INS_GET_PRIV = (byte) 0xD2;
+    public static final byte INS_SET_PUB = (byte) 0xD3;
+    public static final byte INS_SIGN_INIT = (byte) 0xD4;
+    public static final byte INS_SIGN_NONCE = (byte) 0xD5;
+    public static final byte INS_SIGN_FINALIZE = (byte) 0xD6;
 
     public final static short SW_Exception = (short) 0xff01;
     public final static short SW_ArrayIndexOutOfBoundsException = (short) 0xff02;
