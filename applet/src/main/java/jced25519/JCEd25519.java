@@ -25,21 +25,20 @@ import jced25519.jcmathlib.*;
 import jced25519.swalgs.*;
 
 public class JCEd25519 extends Applet implements MultiSelectable {
-    private ECConfig ecc;
-    private ECCurve curve;
-    private Bignat privateKey, privateNonce, signature;
-    private Bignat transformC, transformA3, transformX, transformY, eight;
-    private ECPoint point;
+    private final ECCurve curve;
+    private final Bignat privateKey, privateNonce, signature;
+    private final Bignat transformC, transformA3, transformX, transformY, eight;
+    private final ECPoint point;
 
-    private byte[] masterKey = new byte[32];
-    private byte[] prefix = new byte[32];
-    private byte[] publicKey = new byte[32];
-    private byte[] publicNonce = new byte[32];
+    private final byte[] masterKey = new byte[32];
+    private final byte[] prefix = new byte[32];
+    private final byte[] publicKey = new byte[32];
+    private final byte[] publicNonce = new byte[32];
 
     private MessageDigest hasher;
 
-    private byte[] ramArray = JCSystem.makeTransientByteArray(Wei25519.POINT_SIZE, JCSystem.CLEAR_ON_DESELECT);
-    private RandomData random = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
+    private final byte[] ramArray = JCSystem.makeTransientByteArray(Wei25519.POINT_SIZE, JCSystem.CLEAR_ON_DESELECT);
+    private final RandomData random = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
 
     public static void install(byte[] bArray, short bOffset, byte bLength) {
         new JCEd25519(bArray, bOffset, bLength);
@@ -55,7 +54,7 @@ public class JCEd25519 extends Applet implements MultiSelectable {
             hasher = new Sha2(Sha2.SHA_512);
         }
 
-        ecc = new ECConfig((short) 256);
+        ECConfig ecc = new ECConfig((short) 256);
 
         privateKey = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
 
@@ -88,9 +87,6 @@ public class JCEd25519 extends Applet implements MultiSelectable {
                 case Consts.INS_KEYGEN:
                     generateKeypair(apdu);
                     break;
-                case Consts.INS_SIGN:
-                    sign(apdu);
-                    break;
 
                 case Consts.INS_SET_PUB:
                     setPublicKey(apdu);
@@ -103,6 +99,9 @@ public class JCEd25519 extends Applet implements MultiSelectable {
                     break;
                 case Consts.INS_SIGN_FINALIZE:
                     signFinalize(apdu);
+                    break;
+                case Consts.INS_SIGN_UPDATE:
+                    signUpdate(apdu);
                     break;
 
                 case Consts.INS_GET_PRIV:
@@ -178,37 +177,10 @@ public class JCEd25519 extends Applet implements MultiSelectable {
         }
     }
 
-    private void sign(APDU apdu) {
+    private void setPublicKey(APDU apdu) {
         byte[] apduBuffer = apdu.getBuffer();
-
-        // Generate nonce R
-        // deterministicNonce(apduBuffer, ISO7816.OFFSET_CDATA, (short) 32);
-        randomNonce();
-        point.setW(curve.G, (short) 0, curve.POINT_SIZE);
-        point.multiplication(privateNonce);
-
-        // Compute challenge e
-        hasher.reset();
-        encodeEd25519(point, ramArray, (short) 0);
-        hasher.update(ramArray, (short) 0, curve.COORD_SIZE); // R
-        hasher.update(publicKey, (short) 0, curve.COORD_SIZE); // A
-        hasher.doFinal(apduBuffer, ISO7816.OFFSET_CDATA, (short) 32, apduBuffer, (short) 0); // m
-        changeEndianity(apduBuffer, (short) 0, (short) 64);
-        signature.set_size((short) 64);
-        signature.from_byte_array((short) 64, (short) 0, apduBuffer, (short) 0);
-        signature.mod(curve.rBN);
-        signature.deep_resize((short) 32);
-
-        // Compute signature s = r + ex
-        signature.mod_mult(privateKey, signature, curve.rBN);
-        signature.mod_add(privateNonce, curve.rBN);
-
-        // Return signature (R, s)
-        Util.arrayCopyNonAtomic(ramArray, (short) 0, apduBuffer, (short) 0, curve.COORD_SIZE);
-        signature.prepend_zeros(curve.COORD_SIZE, apduBuffer, curve.COORD_SIZE);
-        changeEndianity(apduBuffer, curve.COORD_SIZE, curve.COORD_SIZE);
-
-        apdu.setOutgoingAndSend((short) 0, (short) (curve.COORD_SIZE + curve.COORD_SIZE));
+        Util.arrayCopyNonAtomic(apduBuffer, ISO7816.OFFSET_CDATA, publicKey, (short) 0, (short) publicKey.length);
+        apdu.setOutgoing();
     }
 
     private void signInit(APDU apdu) {
@@ -219,12 +191,11 @@ public class JCEd25519 extends Applet implements MultiSelectable {
         randomNonce();
         point.setW(curve.G, (short) 0, curve.POINT_SIZE);
         point.multiplication(privateNonce);
+        hasher.reset();
         if (offload) {
-            hasher.reset();
             point.getW(apduBuffer, (short) 0);
             apdu.setOutgoingAndSend((short) 0, curve.POINT_SIZE);
         } else {
-            hasher.reset();
             encodeEd25519(point, ramArray, (short) 0);
             Util.arrayCopyNonAtomic(ramArray, (short) 0, publicNonce, (short) 0, curve.COORD_SIZE);
             hasher.update(ramArray, (short) 0, curve.COORD_SIZE); // R
@@ -244,7 +215,8 @@ public class JCEd25519 extends Applet implements MultiSelectable {
 
     private void signFinalize(APDU apdu) {
         byte[] apduBuffer = apdu.getBuffer();
-        hasher.doFinal(apduBuffer, ISO7816.OFFSET_CDATA, (short) 32, apduBuffer, (short) 0); // m
+        short len = (short) ((short) apduBuffer[ISO7816.OFFSET_P1] & (short) 0xff);
+        hasher.doFinal(apduBuffer, ISO7816.OFFSET_CDATA, len, apduBuffer, (short) 0); // m
         changeEndianity(apduBuffer, (short) 0, (short) 64);
         signature.set_size((short) 64);
         signature.from_byte_array((short) 64, (short) 0, apduBuffer, (short) 0);
@@ -262,10 +234,10 @@ public class JCEd25519 extends Applet implements MultiSelectable {
         apdu.setOutgoingAndSend((short) 0, (short) (curve.COORD_SIZE + curve.COORD_SIZE));
     }
 
-
-    private void setPublicKey(APDU apdu) {
+    private void signUpdate(APDU apdu) {
         byte[] apduBuffer = apdu.getBuffer();
-        Util.arrayCopyNonAtomic(apduBuffer, ISO7816.OFFSET_CDATA, publicKey, (short) 0, (short) publicKey.length);
+        short len = (short) ((short) apduBuffer[ISO7816.OFFSET_P1] & (short) 0xff);
+        hasher.update(apduBuffer, ISO7816.OFFSET_CDATA, len);
         apdu.setOutgoing();
     }
 
@@ -309,6 +281,7 @@ public class JCEd25519 extends Applet implements MultiSelectable {
         }
     }
 
+    // CAN BE USED ONLY IF NO OFFLOADING IS USED; OTHERWISE INSECURE!
     private void deterministicNonce(byte[] msg, short offset, short len) {
         hasher.reset();
         hasher.update(prefix, (short) 0, (short) 32);

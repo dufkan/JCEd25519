@@ -106,7 +106,15 @@ public class AppletTest extends BaseTest {
             Assert.assertNotNull(responseAPDU.getBytes());
             Assert.assertEquals(0, responseAPDU.getData().length);
         }
-        cmd = new CommandAPDU(Consts.CLA_ED25519, Consts.INS_SIGN_FINALIZE, 0, 0, data);
+
+        cmd = new CommandAPDU(Consts.CLA_ED25519, Consts.INS_SIGN_UPDATE, 0, 0, new byte[0]);
+        responseAPDU = cm.transmit(cmd);
+        Assert.assertNotNull(responseAPDU);
+        Assert.assertEquals(0x9000, responseAPDU.getSW());
+        Assert.assertNotNull(responseAPDU.getBytes());
+        Assert.assertEquals(0, responseAPDU.getData().length);
+
+        cmd = new CommandAPDU(Consts.CLA_ED25519, Consts.INS_SIGN_FINALIZE, data.length, 0, data);
         responseAPDU = cm.transmit(cmd);
         Assert.assertNotNull(responseAPDU);
         Assert.assertEquals(0x9000, responseAPDU.getSW());
