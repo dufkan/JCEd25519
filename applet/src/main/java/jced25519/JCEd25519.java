@@ -25,10 +25,10 @@ import jced25519.jcmathlib.*;
 import jced25519.swalgs.*;
 
 public class JCEd25519 extends Applet implements MultiSelectable {
-    private final ECCurve curve;
-    private final Bignat privateKey, privateNonce, signature;
-    private final Bignat transformC, transformA3, transformX, transformY, eight;
-    private final ECPoint point;
+    private ECCurve curve;
+    private Bignat privateKey, privateNonce, signature;
+    private Bignat transformC, transformA3, transformX, transformY, eight;
+    private ECPoint point;
 
     private final byte[] masterKey = new byte[32];
     private final byte[] prefix = new byte[32];
@@ -40,38 +40,14 @@ public class JCEd25519 extends Applet implements MultiSelectable {
     private final byte[] ramArray = JCSystem.makeTransientByteArray(Wei25519.POINT_SIZE, JCSystem.CLEAR_ON_DESELECT);
     private final RandomData random = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
 
+    private boolean initialized = false;
+
     public static void install(byte[] bArray, short bOffset, byte bLength) {
         new JCEd25519(bArray, bOffset, bLength);
     }
 
     public JCEd25519(byte[] buffer, short offset, byte length) {
-        OperationSupport os = OperationSupport.getInstance();
-        os.setCard(OperationSupport.SIMULATOR);
-
-        try {
-            hasher = MessageDigest.getInstance(MessageDigest.ALG_SHA_512, false);
-        } catch (CryptoException e) {
-            hasher = new Sha2(Sha2.SHA_512);
-        }
-
-        ECConfig ecc = new ECConfig((short) 256);
-
-        privateKey = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
-
-        privateNonce = new Bignat((short) 64, JCSystem.MEMORY_TYPE_TRANSIENT_DESELECT, ecc.bnh);
-        signature = new Bignat((short) 64, JCSystem.MEMORY_TYPE_TRANSIENT_DESELECT, ecc.bnh);
-
-        transformC = new Bignat(Consts.TRANSFORM_C, null);
-        transformA3 = new Bignat(Consts.TRANSFORM_A3, null);
-        transformX = new Bignat((short) 32, JCSystem.MEMORY_TYPE_TRANSIENT_RESET, ecc.bnh);
-        transformY = new Bignat((short) 32, JCSystem.MEMORY_TYPE_TRANSIENT_RESET, ecc.bnh);
-
-        eight = new Bignat(Consts.EIGHT, null);
-
-        curve = new ECCurve(false, Wei25519.p, Wei25519.a, Wei25519.b, Wei25519.G, Wei25519.r, Wei25519.k);
-        point = new ECPoint(curve, ecc.ech);
-
-
+        OperationSupport.getInstance().setCard(OperationSupport.SIMULATOR);
         register();
     }
 
@@ -84,6 +60,10 @@ public class JCEd25519 extends Applet implements MultiSelectable {
 
         try {
             switch (apdu.getBuffer()[ISO7816.OFFSET_INS]) {
+                case Consts.INS_INITIALIZE:
+                    initialize(apdu);
+                    break;
+
                 case Consts.INS_KEYGEN:
                     generateKeypair(apdu);
                     break;
@@ -144,7 +124,41 @@ public class JCEd25519 extends Applet implements MultiSelectable {
 
     public void deselect(boolean b) {}
 
+    private void initialize(APDU apdu) {
+        if (initialized)
+            ISOException.throwIt(Consts.E_ALREADY_INITIALIZED);
+
+        try {
+            hasher = MessageDigest.getInstance(MessageDigest.ALG_SHA_512, false);
+        } catch (CryptoException e) {
+            hasher = new Sha2(Sha2.SHA_512);
+        }
+
+        ECConfig ecc = new ECConfig((short) 256);
+
+        privateKey = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
+
+        privateNonce = new Bignat((short) 64, JCSystem.MEMORY_TYPE_TRANSIENT_DESELECT, ecc.bnh);
+        signature = new Bignat((short) 64, JCSystem.MEMORY_TYPE_TRANSIENT_DESELECT, ecc.bnh);
+
+        transformC = new Bignat(Consts.TRANSFORM_C, null);
+        transformA3 = new Bignat(Consts.TRANSFORM_A3, null);
+        transformX = new Bignat((short) 32, JCSystem.MEMORY_TYPE_TRANSIENT_RESET, ecc.bnh);
+        transformY = new Bignat((short) 32, JCSystem.MEMORY_TYPE_TRANSIENT_RESET, ecc.bnh);
+
+        eight = new Bignat(Consts.EIGHT, null);
+
+
+        curve = new ECCurve(false, Wei25519.p, Wei25519.a, Wei25519.b, Wei25519.G, Wei25519.r, Wei25519.k);
+        point = new ECPoint(curve, ecc.ech);
+
+        initialized = true;
+    }
+
     private void generateKeypair(APDU apdu) {
+        if (!initialized)
+            ISOException.throwIt(Consts.E_UNINITIALIZED);
+
         byte[] apduBuffer = apdu.getBuffer();
         boolean offload = apduBuffer[ISO7816.OFFSET_P1] != (byte) 0x00;
 
@@ -178,12 +192,18 @@ public class JCEd25519 extends Applet implements MultiSelectable {
     }
 
     private void setPublicKey(APDU apdu) {
+        if (!initialized)
+            ISOException.throwIt(Consts.E_UNINITIALIZED);
+
         byte[] apduBuffer = apdu.getBuffer();
         Util.arrayCopyNonAtomic(apduBuffer, ISO7816.OFFSET_CDATA, publicKey, (short) 0, (short) publicKey.length);
         apdu.setOutgoing();
     }
 
     private void signInit(APDU apdu) {
+        if (!initialized)
+            ISOException.throwIt(Consts.E_UNINITIALIZED);
+
         byte[] apduBuffer = apdu.getBuffer();
         boolean offload = apduBuffer[ISO7816.OFFSET_P1] != (byte) 0x00;
 
@@ -205,6 +225,9 @@ public class JCEd25519 extends Applet implements MultiSelectable {
     }
 
     private void signNonce(APDU apdu) {
+        if (!initialized)
+            ISOException.throwIt(Consts.E_UNINITIALIZED);
+
         byte[] apduBuffer = apdu.getBuffer();
         hasher.reset();
         Util.arrayCopyNonAtomic(apduBuffer, ISO7816.OFFSET_CDATA, publicNonce, (short) 0, curve.COORD_SIZE);
@@ -214,6 +237,9 @@ public class JCEd25519 extends Applet implements MultiSelectable {
     }
 
     private void signFinalize(APDU apdu) {
+        if (!initialized)
+            ISOException.throwIt(Consts.E_UNINITIALIZED);
+
         byte[] apduBuffer = apdu.getBuffer();
         short len = (short) ((short) apduBuffer[ISO7816.OFFSET_P1] & (short) 0xff);
         hasher.doFinal(apduBuffer, ISO7816.OFFSET_CDATA, len, apduBuffer, (short) 0); // m
@@ -235,6 +261,9 @@ public class JCEd25519 extends Applet implements MultiSelectable {
     }
 
     private void signUpdate(APDU apdu) {
+        if (!initialized)
+            ISOException.throwIt(Consts.E_UNINITIALIZED);
+
         byte[] apduBuffer = apdu.getBuffer();
         short len = (short) ((short) apduBuffer[ISO7816.OFFSET_P1] & (short) 0xff);
         hasher.update(apduBuffer, ISO7816.OFFSET_CDATA, len);

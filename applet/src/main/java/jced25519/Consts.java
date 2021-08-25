@@ -20,6 +20,7 @@ package jced25519;
 
 public class Consts {
     public static final byte CLA_ED25519 = (byte) 0x00;
+    public static final byte INS_INITIALIZE = (byte) 0xDF;
     public static final byte INS_KEYGEN = (byte) 0xD0;
     public static final byte INS_GET_PRIV = (byte) 0xD2;
     public static final byte INS_SET_PUB = (byte) 0xD3;
@@ -27,6 +28,9 @@ public class Consts {
     public static final byte INS_SIGN_NONCE = (byte) 0xD5;
     public static final byte INS_SIGN_FINALIZE = (byte) 0xD6;
     public static final byte INS_SIGN_UPDATE = (byte) 0xD7;
+
+    public final static short E_ALREADY_INITIALIZED = (short) 0xee00;
+    public final static short E_UNINITIALIZED = (short) 0xee01;
 
     public final static short SW_Exception = (short) 0xff01;
     public final static short SW_ArrayIndexOutOfBoundsException = (short) 0xff02;

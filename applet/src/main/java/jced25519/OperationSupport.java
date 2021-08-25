@@ -26,6 +26,7 @@ public class OperationSupport {
     public static final short SIMULATOR = (short) 0x0000;
     public static final short J2E145G = 0x0001;
     public static final short J3H145 = 0x0002;
+    public static final short J3R180 = 0x0003;
 
     public boolean PRECISE_CURVE_BITLENGTH = true;
     public boolean RSA_MULT_TRICK = false;
@@ -34,6 +35,7 @@ public class OperationSupport {
     public boolean RSA_KEY_REFRESH = false;
     public boolean ECDH_X_ONLY = true;
     public boolean ECDH_XY = false;
+    public boolean COFACTOR = false;
 
     private OperationSupport() {}
 
@@ -53,10 +55,14 @@ public class OperationSupport {
                 ECDH_XY = true;
                 break;
             case J2E145G:
-                PRECISE_CURVE_BITLENGTH = true;
                 RSA_MULT_TRICK = true;
                 break;
             case J3H145:
+                RSA_MOD_EXP = false;
+                ECDH_XY = true;
+                break;
+            case J3R180:
+                RSA_MULT_TRICK = true;
                 RSA_MOD_EXP = false;
                 ECDH_XY = true;
                 break;

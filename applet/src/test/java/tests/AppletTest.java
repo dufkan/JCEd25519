@@ -126,7 +126,7 @@ public class AppletTest extends BaseTest {
     @Test
     public void keygen_and_sign() throws Exception {
         final CardManager cm = connect();
-
+        cm.transmit(new CommandAPDU(Consts.CLA_ED25519, Consts.INS_INITIALIZE, 0, 0));
         byte[] pubkeyBytes = keygen(cm, true);
         cm.transmit(new CommandAPDU(Consts.CLA_ED25519, Consts.INS_GET_PRIV, 0, 0));
 

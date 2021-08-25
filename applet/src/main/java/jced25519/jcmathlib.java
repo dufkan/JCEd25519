@@ -917,14 +917,14 @@ public class jcmathlib {
             privKey.setB(b, (short) 0, (short) b.length);
             privKey.setG(G, (short) 0, (short) G.length);
             privKey.setR(r, (short) 0, (short) r.length);
-            //privKey.setK(k);
+            privKey.setK(OperationSupport.getInstance().COFACTOR ? k : (short) 1);
 
             pubKey.setFieldFP(p, (short) 0, (short) p.length);
             pubKey.setA(a, (short) 0, (short) a.length);
             pubKey.setB(b, (short) 0, (short) b.length);
             pubKey.setG(G, (short) 0, (short) G.length);
             pubKey.setR(r, (short) 0, (short) r.length);
-            //pubKey.setK(k);
+            pubKey.setK(OperationSupport.getInstance().COFACTOR ? k : (short) 1);
 
             privKey.setS(Bignat_Helper.CONST_ONE, (short) 0, (short) 1);
             pubKey.setW(G, (short) 0, (short) G.length);
