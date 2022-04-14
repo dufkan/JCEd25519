@@ -25,6 +25,9 @@ import jced25519.jcmathlib.*;
 import jced25519.swalgs.*;
 
 public class JCEd25519 extends Applet implements MultiSelectable {
+    private final boolean DEBUG = true;
+
+    private ECConfig ecc;
     private ECCurve curve;
     private Bignat privateKey, privateNonce, signature;
     private Bignat transformC, transformA3, transformX, transformY, eight;
@@ -85,7 +88,17 @@ public class JCEd25519 extends Applet implements MultiSelectable {
                     break;
 
                 case Consts.INS_GET_PRIV:
+                    if(!DEBUG) {
+                        ISOException.throwIt(Consts.E_DEBUG_DISABLED);
+                    }
                     Util.arrayCopyNonAtomic(privateKey.as_byte_array(), (short) 0, apdu.getBuffer(), (short) 0, (short) 32);
+                    apdu.setOutgoingAndSend((short) 0, (short) 32);
+                    break;
+                case Consts.INS_GET_PRIV_NONCE:
+                    if(!DEBUG) {
+                        ISOException.throwIt(Consts.E_DEBUG_DISABLED);
+                    }
+                    Util.arrayCopyNonAtomic(privateNonce.as_byte_array(), (short) 0, apdu.getBuffer(), (short) 0, (short) 32);
                     apdu.setOutgoingAndSend((short) 0, (short) 32);
                     break;
                 default:
@@ -119,6 +132,7 @@ public class JCEd25519 extends Applet implements MultiSelectable {
     }
 
     public boolean select(boolean b) {
+        ecc.refreshAfterReset();
         return true;
     }
 
@@ -134,7 +148,7 @@ public class JCEd25519 extends Applet implements MultiSelectable {
             hasher = new Sha2(Sha2.SHA_512);
         }
 
-        ECConfig ecc = new ECConfig((short) 256);
+        ecc = new ECConfig((short) 256);
 
         privateKey = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
 
@@ -147,7 +161,6 @@ public class JCEd25519 extends Applet implements MultiSelectable {
         transformY = new Bignat((short) 32, JCSystem.MEMORY_TYPE_TRANSIENT_RESET, ecc.bnh);
 
         eight = new Bignat(Consts.EIGHT, null);
-
 
         curve = new ECCurve(false, Wei25519.p, Wei25519.a, Wei25519.b, Wei25519.G, Wei25519.r, Wei25519.k);
         point = new ECPoint(curve, ecc.ech);
