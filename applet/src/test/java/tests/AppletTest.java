@@ -16,6 +16,8 @@ import net.i2p.crypto.eddsa.EdDSAEngine;
 
 import javax.smartcardio.CommandAPDU;
 import javax.smartcardio.ResponseAPDU;
+import java.io.FileWriter;
+import java.io.PrintWriter;
 import java.math.BigInteger;
 import java.security.MessageDigest;
 import java.security.PublicKey;
@@ -90,9 +92,10 @@ public class AppletTest extends BaseTest {
         return result;
     }
 
-    public byte[] sign(CardManager cm, byte[] data, boolean offload) throws Exception {
+    public byte[] sign(CardManager cm, byte[] data, boolean offload, PrintWriter pw) throws Exception {
         CommandAPDU cmd = new CommandAPDU(Consts.CLA_ED25519, Consts.INS_SIGN_INIT, offload ? 1 : 0, 0);
         ResponseAPDU responseAPDU = cm.transmit(cmd);
+        pw.printf("%d,", cm.getLastTransmitTime());
         Assert.assertNotNull(responseAPDU);
         Assert.assertEquals(0x9000, responseAPDU.getSW());
         Assert.assertNotNull(responseAPDU.getBytes());
@@ -101,14 +104,27 @@ public class AppletTest extends BaseTest {
         if(offload) {
             cmd = new CommandAPDU(Consts.CLA_ED25519, Consts.INS_SIGN_NONCE, 0, 0, encodeEd25519(curve.decodePoint(resp)));
             responseAPDU = cm.transmit(cmd);
+            pw.printf("%d,", cm.getLastTransmitTime());
             Assert.assertNotNull(responseAPDU);
             Assert.assertEquals(0x9000, responseAPDU.getSW());
             Assert.assertNotNull(responseAPDU.getBytes());
             Assert.assertEquals(0, responseAPDU.getData().length);
         }
 
+        cmd = new CommandAPDU(Consts.CLA_ED25519, Consts.INS_GET_PRIV_NONCE, 0, 0);
+        responseAPDU = cm.transmit(cmd);
+        Assert.assertNotNull(responseAPDU);
+        Assert.assertEquals(0x9000, responseAPDU.getSW());
+        Assert.assertNotNull(responseAPDU.getBytes());
+        Assert.assertEquals(32, responseAPDU.getData().length);
+        for(int i = 0; i < 32; ++i) {
+            pw.printf("%02x", responseAPDU.getData()[i]);
+        }
+        pw.print(",");
+
         cmd = new CommandAPDU(Consts.CLA_ED25519, Consts.INS_SIGN_UPDATE, 0, 0, new byte[0]);
         responseAPDU = cm.transmit(cmd);
+        pw.printf("%d,", cm.getLastTransmitTime());
         Assert.assertNotNull(responseAPDU);
         Assert.assertEquals(0x9000, responseAPDU.getSW());
         Assert.assertNotNull(responseAPDU.getBytes());
@@ -116,6 +132,7 @@ public class AppletTest extends BaseTest {
 
         cmd = new CommandAPDU(Consts.CLA_ED25519, Consts.INS_SIGN_FINALIZE, data.length, 0, data);
         responseAPDU = cm.transmit(cmd);
+        pw.printf("%d\n", cm.getLastTransmitTime());
         Assert.assertNotNull(responseAPDU);
         Assert.assertEquals(0x9000, responseAPDU.getSW());
         Assert.assertNotNull(responseAPDU.getBytes());
@@ -125,17 +142,20 @@ public class AppletTest extends BaseTest {
 
     @Test
     public void keygen_and_sign() throws Exception {
+        final PrintWriter pw = new PrintWriter(new FileWriter("measurement.csv"));
+        pw.println("sign_init,sign_nonce,nonce,sign_update,sign_finalize");
+
         final CardManager cm = connect();
         cm.transmit(new CommandAPDU(Consts.CLA_ED25519, Consts.INS_INITIALIZE, 0, 0));
         byte[] pubkeyBytes = keygen(cm, true);
         cm.transmit(new CommandAPDU(Consts.CLA_ED25519, Consts.INS_GET_PRIV, 0, 0));
 
-        for(int j = 0; j < 256; ++j) {
+        for(int j = 0; j < 10; ++j) {
             byte[] data = new byte[32];
             for (int i = 0; i < data.length; ++i)
                 data[i] = (byte) ((0xff & i) + j);
 
-            byte[] signature = sign(cm, data, true);
+            byte[] signature = sign(cm, data, true, pw);
 
             EdDSAParameterSpec spec = EdDSANamedCurveTable.getByName(EdDSANamedCurveTable.ED_25519);
             Signature sgr = new EdDSAEngine(MessageDigest.getInstance(spec.getHashAlgorithm()));
@@ -143,6 +163,7 @@ public class AppletTest extends BaseTest {
             sgr.initVerify(pubKey);
             sgr.update(data);
             Assert.assertTrue(sgr.verify(signature));
+            pw.flush();
         }
     }
 }
