@@ -10,9 +10,11 @@ Structure of this repository is based on [JavaCard Gradle Template](https://gith
 
 - Clone this repository
 
+
 ```bash
 git clone --recursive https://github.com/dufkan/JCEd25519
 ```
+- Select your JavaCard in JCEd25519.java file
 
 - Build the applet
 
@@ -20,6 +22,18 @@ git clone --recursive https://github.com/dufkan/JCEd25519
 ./gradlew buildJavaCard  --info --rerun-tasks
 ```
 
-## APDU
+- Send initialize APDU `00DF000000` to the card. For example, using GlobalPlatform Pro
 
-TODO
+```bash
+gp --apdu 00A404000C6A6365643235353139617070 --apdu 00DF000000 -d
+```
+
+## Performance
+
+Performance of the applet was measured on JavaCard J3R180. The implementation achieved signing on average in 1317 ms with standard deviation of 30 ms. Exact measurements can be found in `measurement.csv` file containing 10000 data samples.
+
+The optimizations in the implementation require the nonce to be generated randomly to be secure; otherwise, the implementation could be made to reuse nonce for signing of a different challenge. This is a minor deviation from Ed25519 specification, but it cannot be externally observed, unless multiple signatures of the same data are issued.
+
+## Supported Cards
+
+The implementation was tested on J3R180, J2E145G.
