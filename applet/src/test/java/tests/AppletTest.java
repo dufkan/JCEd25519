@@ -3,6 +3,7 @@ package tests;
 import jced25519.Consts;
 import cz.muni.fi.crocs.rcard.client.CardManager;
 import cz.muni.fi.crocs.rcard.client.CardType;
+import jced25519.JCEd25519;
 import jced25519.jcmathlib;
 import net.i2p.crypto.eddsa.EdDSAPublicKey;
 import net.i2p.crypto.eddsa.spec.EdDSANamedCurveTable;
@@ -28,7 +29,7 @@ public class AppletTest extends BaseTest {
     ECPoint generator;
 
     public AppletTest() {
-        setCardType(CardType.JCARDSIMLOCAL);
+        setCardType(JCEd25519.CARD == jcmathlib.OperationSupport.SIMULATOR ? CardType.JCARDSIMLOCAL : CardType.PHYSICAL);
         setSimulateStateful(true);
 
         curve = new ECCurve.Fp(
@@ -39,7 +40,6 @@ public class AppletTest extends BaseTest {
                 BigInteger.valueOf(8)
         );
         generator = curve.decodePoint(jcmathlib.Wei25519.G);
-
     }
 
     private byte[] encodeEd25519(ECPoint point) {
@@ -146,7 +146,6 @@ public class AppletTest extends BaseTest {
         pw.println("sign_init,sign_nonce,nonce,sign_update,sign_finalize");
 
         final CardManager cm = connect();
-        cm.transmit(new CommandAPDU(Consts.CLA_ED25519, Consts.INS_INITIALIZE, 0, 0));
         byte[] pubkeyBytes = keygen(cm, true);
         cm.transmit(new CommandAPDU(Consts.CLA_ED25519, Consts.INS_GET_PRIV, 0, 0));
 

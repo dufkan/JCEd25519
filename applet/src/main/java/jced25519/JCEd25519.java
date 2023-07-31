@@ -5,13 +5,19 @@ import javacard.security.*;
 import jced25519.jcmathlib.*;
 import jced25519.swalgs.*;
 
-public class JCEd25519 extends Applet implements MultiSelectable {
-    private final boolean DEBUG = true;
+public class JCEd25519 extends Applet {
+    public final static boolean DEBUG = true;
+    public final static short CARD = OperationSupport.SIMULATOR; // TODO set your card
+    // public final static short CARD = OperationSupport.JCOP4_P71; // NXP J3Rxxx
+    // public final static short CARD = OperationSupport.JCOP3_P60; // NXP J3H145
+    // public final static short CARD = OperationSupport.JCOP21;    // NXP J2E145
+    // public final static short CARD = OperationSupport.SECORA;    // Infineon Secora ID S
 
-    private ECConfig ecc;
+
+    private ResourceManager rm;
     private ECCurve curve;
-    private Bignat privateKey, privateNonce, signature;
-    private Bignat transformC, transformA3, transformX, transformY, eight;
+    private BigNat privateKey, privateNonce, signature;
+    private BigNat transformC, transformA3, transformX, transformY, eight;
     private ECPoint point;
 
     private final byte[] masterKey = new byte[32];
@@ -21,7 +27,7 @@ public class JCEd25519 extends Applet implements MultiSelectable {
 
     private MessageDigest hasher;
 
-    private final byte[] ramArray = JCSystem.makeTransientByteArray(Wei25519.POINT_SIZE, JCSystem.CLEAR_ON_DESELECT);
+    private final byte[] ramArray = JCSystem.makeTransientByteArray((short) Wei25519.G.length, JCSystem.CLEAR_ON_DESELECT);
     private final RandomData random = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
 
     private boolean initialized = false;
@@ -31,7 +37,7 @@ public class JCEd25519 extends Applet implements MultiSelectable {
     }
 
     public JCEd25519(byte[] buffer, short offset, byte length) {
-        OperationSupport.getInstance().setCard(OperationSupport.SIMULATOR);
+        OperationSupport.getInstance().setCard(CARD);
         register();
     }
 
@@ -39,15 +45,15 @@ public class JCEd25519 extends Applet implements MultiSelectable {
         if (selectingApplet())
             return;
 
+        if (!initialized) {
+            initialize(apdu);
+        }
+
         if (apdu.getBuffer()[ISO7816.OFFSET_CLA] != Consts.CLA_ED25519)
             ISOException.throwIt(ISO7816.SW_CLA_NOT_SUPPORTED);
 
         try {
             switch (apdu.getBuffer()[ISO7816.OFFSET_INS]) {
-                case Consts.INS_INITIALIZE:
-                    initialize(apdu);
-                    break;
-
                 case Consts.INS_KEYGEN:
                     generateKeypair(apdu);
                     break;
@@ -72,14 +78,14 @@ public class JCEd25519 extends Applet implements MultiSelectable {
                     if(!DEBUG) {
                         ISOException.throwIt(Consts.E_DEBUG_DISABLED);
                     }
-                    Util.arrayCopyNonAtomic(privateKey.as_byte_array(), (short) 0, apdu.getBuffer(), (short) 0, (short) 32);
+                    privateKey.copyToByteArray(apdu.getBuffer(), (short) 0);
                     apdu.setOutgoingAndSend((short) 0, (short) 32);
                     break;
                 case Consts.INS_GET_PRIV_NONCE:
                     if(!DEBUG) {
                         ISOException.throwIt(Consts.E_DEBUG_DISABLED);
                     }
-                    Util.arrayCopyNonAtomic(privateNonce.as_byte_array(), (short) 0, apdu.getBuffer(), (short) 0, (short) 32);
+                    privateNonce.copyToByteArray(apdu.getBuffer(), (short) 0);
                     apdu.setOutgoingAndSend((short) 0, (short) 32);
                     break;
                 default:
@@ -112,12 +118,12 @@ public class JCEd25519 extends Applet implements MultiSelectable {
         }
     }
 
-    public boolean select(boolean b) {
-        ecc.refreshAfterReset();
+    public boolean select() {
+        if (initialized) {
+            curve.updateAfterReset();
+        }
         return true;
     }
-
-    public void deselect(boolean b) {}
 
     private void initialize(APDU apdu) {
         if (initialized)
@@ -129,22 +135,25 @@ public class JCEd25519 extends Applet implements MultiSelectable {
             hasher = new Sha2(Sha2.SHA_512);
         }
 
-        ecc = new ECConfig((short) 256);
+        rm = new ResourceManager((short) 256);
 
-        privateKey = new Bignat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, ecc.bnh);
+        privateKey = new BigNat((short) 32, JCSystem.MEMORY_TYPE_PERSISTENT, rm);
 
-        privateNonce = new Bignat((short) 64, JCSystem.MEMORY_TYPE_TRANSIENT_DESELECT, ecc.bnh);
-        signature = new Bignat((short) 64, JCSystem.MEMORY_TYPE_TRANSIENT_DESELECT, ecc.bnh);
+        privateNonce = new BigNat((short) 64, JCSystem.MEMORY_TYPE_TRANSIENT_DESELECT, rm);
+        signature = new BigNat((short) 64, JCSystem.MEMORY_TYPE_TRANSIENT_DESELECT, rm);
 
-        transformC = new Bignat(Consts.TRANSFORM_C, null);
-        transformA3 = new Bignat(Consts.TRANSFORM_A3, null);
-        transformX = new Bignat((short) 32, JCSystem.MEMORY_TYPE_TRANSIENT_RESET, ecc.bnh);
-        transformY = new Bignat((short) 32, JCSystem.MEMORY_TYPE_TRANSIENT_RESET, ecc.bnh);
+        transformC = new BigNat((short) Consts.TRANSFORM_C.length, JCSystem.MEMORY_TYPE_PERSISTENT, rm);
+        transformC.fromByteArray(Consts.TRANSFORM_C, (short) 0, (short) Consts.TRANSFORM_C.length);
+        transformA3 = new BigNat((short) Consts.TRANSFORM_A3.length, JCSystem.MEMORY_TYPE_PERSISTENT, rm);
+        transformA3.fromByteArray(Consts.TRANSFORM_A3, (short) 0, (short) Consts.TRANSFORM_A3.length);
+        transformX = new BigNat((short) 32, JCSystem.MEMORY_TYPE_TRANSIENT_RESET, rm);
+        transformY = new BigNat((short) 32, JCSystem.MEMORY_TYPE_TRANSIENT_RESET, rm);
 
-        eight = new Bignat(Consts.EIGHT, null);
+        eight = new BigNat((short) 1,  JCSystem.MEMORY_TYPE_PERSISTENT, rm);
+        eight.setValue((byte) 8);
 
-        curve = new ECCurve(false, Wei25519.p, Wei25519.a, Wei25519.b, Wei25519.G, Wei25519.r, Wei25519.k);
-        point = new ECPoint(curve, ecc.ech);
+        curve = new ECCurve(Wei25519.p, Wei25519.a, Wei25519.b, Wei25519.G, Wei25519.r, Wei25519.k, rm);
+        point = new ECPoint(curve);
 
         initialized = true;
     }
@@ -166,11 +175,12 @@ public class JCEd25519 extends Applet implements MultiSelectable {
 
         Util.arrayCopyNonAtomic(ramArray, (short) 32, prefix, (short) 0, (short) 32);
 
-        privateKey.from_byte_array((short) 32, (short) 0, ramArray, (short) 0);
-        privateKey.shift_bits_right_3(); // Required by smartcards (scalar must be lesser than r)
+        privateKey.fromByteArray(ramArray, (short) 0, (short) 32);
+        privateKey.shiftRight((short) 3); // Required by smartcards (scalar must be lesser than r)
         point.setW(curve.G, (short) 0, curve.POINT_SIZE);
         point.multiplication(privateKey);
-        privateKey.from_byte_array((short) 32, (short) 0, ramArray, (short) 0); // Reload private key
+        privateKey.fromByteArray(ramArray, (short) 0, (short) 32); // Reload private key
+        privateKey.mod(curve.rBN);
 
         if(!offload) {
             point.multiplication(eight); // Compensate bit shift
@@ -238,18 +248,17 @@ public class JCEd25519 extends Applet implements MultiSelectable {
         short len = (short) ((short) apduBuffer[ISO7816.OFFSET_P1] & (short) 0xff);
         hasher.doFinal(apduBuffer, ISO7816.OFFSET_CDATA, len, apduBuffer, (short) 0); // m
         changeEndianity(apduBuffer, (short) 0, (short) 64);
-        signature.set_size((short) 64);
-        signature.from_byte_array((short) 64, (short) 0, apduBuffer, (short) 0);
+        signature.fromByteArray(apduBuffer, (short) 0, (short) 64);
         signature.mod(curve.rBN);
-        signature.deep_resize((short) 32);
+        signature.resize((short) 32);
 
         // Compute signature s = r + ex
-        signature.mod_mult(privateKey, signature, curve.rBN);
-        signature.mod_add(privateNonce, curve.rBN);
+        signature.modMult(privateKey, curve.rBN);
+        signature.modAdd(privateNonce, curve.rBN);
 
         // Return signature (R, s)
         Util.arrayCopyNonAtomic(publicNonce, (short) 0, apduBuffer, (short) 0, curve.COORD_SIZE);
-        signature.prepend_zeros(curve.COORD_SIZE, apduBuffer, curve.COORD_SIZE);
+        signature.prependZeros(curve.COORD_SIZE, apduBuffer, curve.COORD_SIZE);
         changeEndianity(apduBuffer, curve.COORD_SIZE, curve.COORD_SIZE);
         apdu.setOutgoingAndSend((short) 0, (short) (curve.COORD_SIZE + curve.COORD_SIZE));
     }
@@ -268,30 +277,27 @@ public class JCEd25519 extends Applet implements MultiSelectable {
         point.getW(ramArray, (short) 0);
 
         // Compute X
-        transformX.set_size((short) 32);
-        transformX.from_byte_array((short) 32, (short) 0, ramArray, (short) 1);
-        transformY.set_size((short) 32);
-        transformY.from_byte_array((short) 32, (short) 0, ramArray, (short) 33);
-        transformX.mod_sub(transformA3, curve.pBN);
-        transformX.mod_mult(transformX, transformC, curve.pBN);
-        transformY.mod_inv(curve.pBN);
-        transformX.mod_mult(transformX, transformY, curve.pBN);
-        transformX.deep_resize((short) 32);
+        transformX.fromByteArray(ramArray, (short) 1, (short) 32);
+        transformY.fromByteArray(ramArray, (short) 33, (short) 32);
+        transformX.modSub(transformA3, curve.pBN);
+        transformX.modMult(transformC, curve.pBN);
+        transformY.modInv(curve.pBN);
+        transformX.modMult(transformY, curve.pBN);
 
-        boolean x_bit = transformX.is_odd();
+        boolean xBit = transformX.isOdd();
 
         // Compute Y
-        transformX.from_byte_array((short) 32, (short) 0, ramArray, (short) 1);
-        transformX.mod_sub(transformA3, curve.pBN);
-        transformY.set_size((short) 32);
-        transformY.copy(transformX);
-        transformX.decrement_one();
-        transformY.mod_add(Bignat_Helper.ONE, curve.pBN);
-        transformY.mod_inv(curve.pBN);
-        transformX.mod_mult(transformX, transformY, curve.pBN);
-        transformX.prepend_zeros(curve.COORD_SIZE, buffer, offset);
+        transformX.fromByteArray(ramArray, (short) 1, (short) 32);
+        transformX.modSub(transformA3, curve.pBN);
+        transformY.clone(transformX);
+        transformX.decrement();
+        transformY.increment();
+        transformY.mod(curve.pBN);
+        transformY.modInv(curve.pBN);
+        transformX.modMult(transformY, curve.pBN);
+        transformX.prependZeros(curve.COORD_SIZE, buffer, offset);
 
-        buffer[offset] |= x_bit ? (byte) 0x80 : (byte) 0x00;
+        buffer[offset] |= xBit ? (byte) 0x80 : (byte) 0x00;
 
         changeEndianity(buffer, offset, (short) 32);
     }
@@ -310,16 +316,15 @@ public class JCEd25519 extends Applet implements MultiSelectable {
         hasher.update(prefix, (short) 0, (short) 32);
         hasher.doFinal(msg, offset, len, ramArray, (short) 0);
         changeEndianity(ramArray, (short) 0, (short) 64);
-        privateNonce.set_size((short) 64);
-        privateNonce.from_byte_array((short) 64, (short) 0, ramArray, (short) 0);
+        privateNonce.fromByteArray(ramArray, (short) 0, (short) 64);
         privateNonce.mod(curve.rBN);
-        privateNonce.deep_resize((short) 32);
+        privateNonce.resize((short) 32);
     }
 
     private void randomNonce() {
         random.generateData(ramArray, (short) 0, (short) 32);
-        privateNonce.from_byte_array((short) 32, (short) 0, ramArray, (short) 0);
+        privateNonce.fromByteArray(ramArray, (short) 0, (short) 32);
         privateNonce.mod(curve.rBN);
-        privateNonce.deep_resize((short) 32);
+        privateNonce.resize((short) 32);
     }
 }

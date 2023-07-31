@@ -36,4 +36,4 @@ The optimizations in the implementation require the nonce to be generated random
 
 ## Supported Cards
 
-The implementation was tested on NXP J3R180, NXP J2E145G.
+The implementation was tested on NXP J3R200, NXP J3H145, NXP J2E145G, and Infineon Secora ID S.
