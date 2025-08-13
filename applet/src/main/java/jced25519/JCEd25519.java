@@ -159,9 +159,6 @@ public class JCEd25519 extends Applet {
     }
 
     private void generateKeypair(APDU apdu) {
-        if (!initialized)
-            ISOException.throwIt(Consts.E_UNINITIALIZED);
-
         byte[] apduBuffer = apdu.getBuffer();
         boolean offload = apduBuffer[ISO7816.OFFSET_P1] != (byte) 0x00;
 
@@ -196,18 +193,12 @@ public class JCEd25519 extends Applet {
     }
 
     private void setPublicKey(APDU apdu) {
-        if (!initialized)
-            ISOException.throwIt(Consts.E_UNINITIALIZED);
-
         byte[] apduBuffer = apdu.getBuffer();
         Util.arrayCopyNonAtomic(apduBuffer, ISO7816.OFFSET_CDATA, publicKey, (short) 0, (short) publicKey.length);
         apdu.setOutgoing();
     }
 
     private void signInit(APDU apdu) {
-        if (!initialized)
-            ISOException.throwIt(Consts.E_UNINITIALIZED);
-
         byte[] apduBuffer = apdu.getBuffer();
         boolean offload = apduBuffer[ISO7816.OFFSET_P1] != (byte) 0x00;
 
@@ -229,9 +220,6 @@ public class JCEd25519 extends Applet {
     }
 
     private void signNonce(APDU apdu) {
-        if (!initialized)
-            ISOException.throwIt(Consts.E_UNINITIALIZED);
-
         byte[] apduBuffer = apdu.getBuffer();
         hasher.reset();
         Util.arrayCopyNonAtomic(apduBuffer, ISO7816.OFFSET_CDATA, publicNonce, (short) 0, curve.COORD_SIZE);
@@ -241,9 +229,6 @@ public class JCEd25519 extends Applet {
     }
 
     private void signFinalize(APDU apdu) {
-        if (!initialized)
-            ISOException.throwIt(Consts.E_UNINITIALIZED);
-
         byte[] apduBuffer = apdu.getBuffer();
         short len = (short) ((short) apduBuffer[ISO7816.OFFSET_P1] & (short) 0xff);
         hasher.doFinal(apduBuffer, ISO7816.OFFSET_CDATA, len, apduBuffer, (short) 0); // m
@@ -264,9 +249,6 @@ public class JCEd25519 extends Applet {
     }
 
     private void signUpdate(APDU apdu) {
-        if (!initialized)
-            ISOException.throwIt(Consts.E_UNINITIALIZED);
-
         byte[] apduBuffer = apdu.getBuffer();
         short len = (short) ((short) apduBuffer[ISO7816.OFFSET_P1] & (short) 0xff);
         hasher.update(apduBuffer, ISO7816.OFFSET_CDATA, len);
