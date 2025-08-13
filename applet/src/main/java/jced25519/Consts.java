@@ -11,9 +11,17 @@ public class Consts {
     public static final byte INS_SIGN_UPDATE = (byte) 0xD7;
     public static final byte INS_GET_PRIV_NONCE = (byte) 0xD8;
 
+    public static final byte STATE_UNINITIALIZED = (byte) 0;
+    public static final byte STATE_INITIALIZED = (byte) 1;
+    public static final byte STATE_KEYGEN_OFFLOAD = (byte) 2;
+    public static final byte STATE_READY = (byte) 3;
+    public static final byte STATE_SIGNING = (byte) 4;
+    public static final byte STATE_SIGNING_OFFLOAD = (byte) 5;
+
     public final static short E_ALREADY_INITIALIZED = (short) 0xee00;
     public final static short E_UNINITIALIZED = (short) 0xee01;
     public final static short E_DEBUG_DISABLED = (short) 0xee02;
+    public final static short E_INVALID_STATE = (short) 0xee03;
 
     public final static short SW_Exception = (short) 0xff01;
     public final static short SW_ArrayIndexOutOfBoundsException = (short) 0xff02;

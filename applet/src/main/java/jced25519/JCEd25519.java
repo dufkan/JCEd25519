@@ -13,6 +13,7 @@ public class JCEd25519 extends Applet {
     // public final static short CARD = OperationSupport.JCOP21;    // NXP J2E145
     // public final static short CARD = OperationSupport.SECORA;    // Infineon Secora ID S
 
+    private byte state = Consts.STATE_UNINITIALIZED;
 
     private ResourceManager rm;
     private ECCurve curve;
@@ -30,8 +31,6 @@ public class JCEd25519 extends Applet {
     private final byte[] ramArray = JCSystem.makeTransientByteArray((short) Wei25519.G.length, JCSystem.CLEAR_ON_DESELECT);
     private final RandomData random = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
 
-    private boolean initialized = false;
-
     public static void install(byte[] bArray, short bOffset, byte bLength) {
         new JCEd25519(bArray, bOffset, bLength);
     }
@@ -45,7 +44,7 @@ public class JCEd25519 extends Applet {
         if (selectingApplet())
             return;
 
-        if (!initialized) {
+        if (state == Consts.STATE_UNINITIALIZED) {
             initialize(apdu);
         }
 
@@ -57,10 +56,10 @@ public class JCEd25519 extends Applet {
                 case Consts.INS_KEYGEN:
                     generateKeypair(apdu);
                     break;
-
                 case Consts.INS_SET_PUB:
                     setPublicKey(apdu);
                     break;
+
                 case Consts.INS_SIGN_INIT:
                     signInit(apdu);
                     break;
@@ -119,14 +118,14 @@ public class JCEd25519 extends Applet {
     }
 
     public boolean select() {
-        if (initialized) {
+        if (state != Consts.STATE_UNINITIALIZED)
             curve.updateAfterReset();
-        }
+
         return true;
     }
 
     private void initialize(APDU apdu) {
-        if (initialized)
+        if (state != Consts.STATE_UNINITIALIZED)
             ISOException.throwIt(Consts.E_ALREADY_INITIALIZED);
 
         try {
@@ -155,10 +154,13 @@ public class JCEd25519 extends Applet {
         curve = new ECCurve(Wei25519.p, Wei25519.a, Wei25519.b, Wei25519.G, Wei25519.r, Wei25519.k, rm);
         point = new ECPoint(curve);
 
-        initialized = true;
+        state = Consts.STATE_INITIALIZED;;
     }
 
     private void generateKeypair(APDU apdu) {
+        if (state != Consts.STATE_INITIALIZED && !DEBUG) // Disallow key overwriting
+            ISOException.throwIt(Consts.E_INVALID_STATE);
+
         byte[] apduBuffer = apdu.getBuffer();
         boolean offload = apduBuffer[ISO7816.OFFSET_P1] != (byte) 0x00;
 
@@ -179,26 +181,35 @@ public class JCEd25519 extends Applet {
         privateKey.fromByteArray(ramArray, (short) 0, (short) 32); // Reload private key
         privateKey.mod(curve.rBN);
 
-        if(!offload) {
+        if(offload) {
+            point.getW(apduBuffer, (short) 0);
+            state = Consts.STATE_KEYGEN_OFFLOAD;
+            apdu.setOutgoingAndSend((short) 0, curve.POINT_SIZE);
+        } else {
             point.multiplication(eight); // Compensate bit shift
 
             encodeEd25519(point, publicKey, (short) 0);
 
             Util.arrayCopyNonAtomic(publicKey, (short) 0, apduBuffer, (short) 0, (short) 32);
+            state = Consts.STATE_READY;
             apdu.setOutgoingAndSend((short) 0, (short) 32);
-        } else {
-            point.getW(apduBuffer, (short) 0);
-            apdu.setOutgoingAndSend((short) 0, curve.POINT_SIZE);
         }
     }
 
     private void setPublicKey(APDU apdu) {
+        if (state != Consts.STATE_KEYGEN_OFFLOAD)
+            ISOException.throwIt(Consts.E_INVALID_STATE);
+
         byte[] apduBuffer = apdu.getBuffer();
         Util.arrayCopyNonAtomic(apduBuffer, ISO7816.OFFSET_CDATA, publicKey, (short) 0, (short) publicKey.length);
+        state = Consts.STATE_READY;
         apdu.setOutgoing();
     }
 
     private void signInit(APDU apdu) {
+        if (state != Consts.STATE_READY)
+            ISOException.throwIt(Consts.E_INVALID_STATE);
+
         byte[] apduBuffer = apdu.getBuffer();
         boolean offload = apduBuffer[ISO7816.OFFSET_P1] != (byte) 0x00;
 
@@ -209,26 +220,35 @@ public class JCEd25519 extends Applet {
         hasher.reset();
         if (offload) {
             point.getW(apduBuffer, (short) 0);
+            state = Consts.STATE_SIGNING_OFFLOAD;
             apdu.setOutgoingAndSend((short) 0, curve.POINT_SIZE);
         } else {
             encodeEd25519(point, ramArray, (short) 0);
             Util.arrayCopyNonAtomic(ramArray, (short) 0, publicNonce, (short) 0, curve.COORD_SIZE);
             hasher.update(ramArray, (short) 0, curve.COORD_SIZE); // R
             hasher.update(publicKey, (short) 0, curve.COORD_SIZE); // A
+            state = Consts.STATE_SIGNING;
             apdu.setOutgoing();
         }
     }
 
     private void signNonce(APDU apdu) {
+        if (state != Consts.STATE_SIGNING_OFFLOAD)
+            ISOException.throwIt(Consts.E_INVALID_STATE);
+
         byte[] apduBuffer = apdu.getBuffer();
         hasher.reset();
         Util.arrayCopyNonAtomic(apduBuffer, ISO7816.OFFSET_CDATA, publicNonce, (short) 0, curve.COORD_SIZE);
         hasher.update(apduBuffer, ISO7816.OFFSET_CDATA, curve.COORD_SIZE); // R
         hasher.update(publicKey, (short) 0, curve.COORD_SIZE); // A
+        state = Consts.STATE_SIGNING;
         apdu.setOutgoing();
     }
 
     private void signFinalize(APDU apdu) {
+        if (state != Consts.STATE_SIGNING)
+            ISOException.throwIt(Consts.E_INVALID_STATE);
+
         byte[] apduBuffer = apdu.getBuffer();
         short len = (short) ((short) apduBuffer[ISO7816.OFFSET_P1] & (short) 0xff);
         hasher.doFinal(apduBuffer, ISO7816.OFFSET_CDATA, len, apduBuffer, (short) 0); // m
@@ -245,10 +265,14 @@ public class JCEd25519 extends Applet {
         Util.arrayCopyNonAtomic(publicNonce, (short) 0, apduBuffer, (short) 0, curve.COORD_SIZE);
         signature.prependZeros(curve.COORD_SIZE, apduBuffer, curve.COORD_SIZE);
         changeEndianity(apduBuffer, curve.COORD_SIZE, curve.COORD_SIZE);
+        state = Consts.STATE_READY;
         apdu.setOutgoingAndSend((short) 0, (short) (curve.COORD_SIZE + curve.COORD_SIZE));
     }
 
     private void signUpdate(APDU apdu) {
+        if (state != Consts.STATE_SIGNING)
+            ISOException.throwIt(Consts.E_INVALID_STATE);
+
         byte[] apduBuffer = apdu.getBuffer();
         short len = (short) ((short) apduBuffer[ISO7816.OFFSET_P1] & (short) 0xff);
         hasher.update(apduBuffer, ISO7816.OFFSET_CDATA, len);
