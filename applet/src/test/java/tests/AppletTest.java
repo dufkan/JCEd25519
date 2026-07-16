@@ -1,168 +1,166 @@
 package tests;
 
-import jced25519.Consts;
 import cz.muni.fi.crocs.rcard.client.CardManager;
 import cz.muni.fi.crocs.rcard.client.CardType;
+import jced25519.Consts;
 import jced25519.JCEd25519;
 import jced25519.jcmathlib;
-import net.i2p.crypto.eddsa.EdDSAPublicKey;
-import net.i2p.crypto.eddsa.spec.EdDSANamedCurveTable;
-import net.i2p.crypto.eddsa.spec.EdDSAParameterSpec;
-import net.i2p.crypto.eddsa.spec.EdDSAPublicKeySpec;
-import org.bouncycastle.math.ec.ECCurve;
-import org.bouncycastle.math.ec.ECPoint;
-import org.junit.Assert;
-import org.junit.jupiter.api.*;
-import net.i2p.crypto.eddsa.EdDSAEngine;
+import javacard.framework.ISO7816;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 
 import javax.smartcardio.CommandAPDU;
 import javax.smartcardio.ResponseAPDU;
-import java.io.FileWriter;
-import java.io.PrintWriter;
-import java.math.BigInteger;
-import java.security.MessageDigest;
-import java.security.PublicKey;
-import java.security.Signature;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
+
+/**
+ * Functional and error-path tests for the JCEd25519 applet.
+ *
+ * These tests exercise both the on-card ("non-offload") and host-assisted
+ * ("offload") code paths and validate produced signatures against the reference
+ * {@code net.i2p.crypto.eddsa} implementation.
+ */
 public class AppletTest extends BaseTest {
-    ECCurve curve;
-    ECPoint generator;
 
     public AppletTest() {
         setCardType(JCEd25519.CARD == jcmathlib.OperationSupport.SIMULATOR ? CardType.JCARDSIMLOCAL : CardType.PHYSICAL);
         setSimulateStateful(true);
-
-        curve = new ECCurve.Fp(
-                new BigInteger(1, jcmathlib.Wei25519.p),
-                new BigInteger(1, jcmathlib.Wei25519.a),
-                new BigInteger(1, jcmathlib.Wei25519.b),
-                new BigInteger(1, jcmathlib.Wei25519.r),
-                BigInteger.valueOf(8)
-        );
-        generator = curve.decodePoint(jcmathlib.Wei25519.G);
     }
 
-    private byte[] encodeEd25519(ECPoint point) {
-        BigInteger p = new BigInteger(1, jcmathlib.Wei25519.p);
-        BigInteger a3 = new BigInteger(1, Consts.TRANSFORM_A3);
-        BigInteger c = new BigInteger(1, Consts.TRANSFORM_C);
-
-        BigInteger x = point.normalize().getAffineXCoord().toBigInteger();
-        BigInteger y = point.normalize().getAffineYCoord().toBigInteger();
-
-        BigInteger tmp = x.subtract(a3).mod(p);
-
-        boolean x_bit = tmp.multiply(c).mod(p).multiply(y.modInverse(p)).mod(p).testBit(0);
-
-        // Compute Y
-        byte[] result = tmp.subtract(BigInteger.ONE).multiply(tmp.add(BigInteger.ONE).modInverse(p)).mod(p).toByteArray();
-        byte[] output = new byte[32];
-        int diff = output.length - result.length;
-
-        for(int i = diff; i < output.length; ++i) {
-            output[i] = result[i - diff];
-        }
-        output[0] |= x_bit ? (byte) 0x80 : (byte) 0x00;
-        for (short i = 0; i < (short) (output.length / 2); ++i) {
-            byte t = output[output.length - i - 1];
-            output[(short) (output.length - i - 1)] = output[i];
-            output[i] = t;
-        }
-
-        return output;
+    private Ed25519Card card() throws Exception {
+        return new Ed25519Card(connect());
     }
 
-    public byte[] keygen(CardManager cm, boolean offload) throws Exception {
-        CommandAPDU cmd = new CommandAPDU(Consts.CLA_ED25519, Consts.INS_KEYGEN, offload ? 1 : 0, 0);
-        ResponseAPDU responseAPDU = cm.transmit(cmd);
-        Assert.assertNotNull(responseAPDU);
-        Assert.assertEquals(0x9000, responseAPDU.getSW());
-        Assert.assertNotNull(responseAPDU.getBytes());
-        Assert.assertEquals(offload ? 65 : 32, responseAPDU.getData().length);
-        byte[] result = responseAPDU.getData();
-        if (offload) {
-            ECPoint publicKey = curve.decodePoint(result).multiply(BigInteger.valueOf(8));
-            result = encodeEd25519(publicKey);
-            cmd = new CommandAPDU(Consts.CLA_ED25519, Consts.INS_SET_PUB, 0, 0, result);
-            responseAPDU = cm.transmit(cmd);
-            Assert.assertNotNull(responseAPDU);
-            Assert.assertEquals(0x9000, responseAPDU.getSW());
-            Assert.assertNotNull(responseAPDU.getBytes());
-        }
-        return result;
-    }
+    // ------------------------------------------------------------------
+    // Correctness: key generation and signing
+    // ------------------------------------------------------------------
 
-    public byte[] sign(CardManager cm, byte[] data, boolean offload, PrintWriter pw) throws Exception {
-        CommandAPDU cmd = new CommandAPDU(Consts.CLA_ED25519, Consts.INS_SIGN_INIT, offload ? 1 : 0, 0);
-        ResponseAPDU responseAPDU = cm.transmit(cmd);
-        pw.printf("%d,", cm.getLastTransmitTime());
-        Assert.assertNotNull(responseAPDU);
-        Assert.assertEquals(0x9000, responseAPDU.getSW());
-        Assert.assertNotNull(responseAPDU.getBytes());
-        Assert.assertEquals(offload ? 65 : 0, responseAPDU.getData().length);
-        byte[] resp = responseAPDU.getData();
-        if(offload) {
-            cmd = new CommandAPDU(Consts.CLA_ED25519, Consts.INS_SIGN_NONCE, 0, 0, encodeEd25519(curve.decodePoint(resp)));
-            responseAPDU = cm.transmit(cmd);
-            pw.printf("%d,", cm.getLastTransmitTime());
-            Assert.assertNotNull(responseAPDU);
-            Assert.assertEquals(0x9000, responseAPDU.getSW());
-            Assert.assertNotNull(responseAPDU.getBytes());
-            Assert.assertEquals(0, responseAPDU.getData().length);
-        }
+    @Test
+    @DisplayName("Non-offload keygen produces a key that verifies signatures")
+    public void keygenAndSign_nonOffload() throws Exception {
+        Ed25519Card card = card();
+        byte[] pub = card.keygen(false);
 
-        cmd = new CommandAPDU(Consts.CLA_ED25519, Consts.INS_GET_PRIV_NONCE, 0, 0);
-        responseAPDU = cm.transmit(cmd);
-        Assert.assertNotNull(responseAPDU);
-        Assert.assertEquals(0x9000, responseAPDU.getSW());
-        Assert.assertNotNull(responseAPDU.getBytes());
-        Assert.assertEquals(32, responseAPDU.getData().length);
-        for(int i = 0; i < 32; ++i) {
-            pw.printf("%02x", responseAPDU.getData()[i]);
-        }
-        pw.print(",");
+        byte[] msg = message(32, 0);
+        byte[] sig = card.sign(msg, false);
 
-        cmd = new CommandAPDU(Consts.CLA_ED25519, Consts.INS_SIGN_UPDATE, 0, 0, new byte[0]);
-        responseAPDU = cm.transmit(cmd);
-        pw.printf("%d,", cm.getLastTransmitTime());
-        Assert.assertNotNull(responseAPDU);
-        Assert.assertEquals(0x9000, responseAPDU.getSW());
-        Assert.assertNotNull(responseAPDU.getBytes());
-        Assert.assertEquals(0, responseAPDU.getData().length);
-
-        cmd = new CommandAPDU(Consts.CLA_ED25519, Consts.INS_SIGN_FINALIZE, data.length, 0, data);
-        responseAPDU = cm.transmit(cmd);
-        pw.printf("%d\n", cm.getLastTransmitTime());
-        Assert.assertNotNull(responseAPDU);
-        Assert.assertEquals(0x9000, responseAPDU.getSW());
-        Assert.assertNotNull(responseAPDU.getBytes());
-        Assert.assertEquals(64, responseAPDU.getData().length);
-        return responseAPDU.getData();
+        assertTrue(Ed25519Card.verify(pub, msg, sig));
     }
 
     @Test
-    public void keygen_and_sign() throws Exception {
-        final PrintWriter pw = new PrintWriter(new FileWriter("measurement.csv"));
-        pw.println("sign_init,sign_nonce,nonce,sign_update,sign_finalize");
+    @DisplayName("Offload keygen produces a key that verifies signatures")
+    public void keygenAndSign_offload() throws Exception {
+        Ed25519Card card = card();
+        byte[] pub = card.keygen(true);
 
-        final CardManager cm = connect();
-        byte[] pubkeyBytes = keygen(cm, true);
-        cm.transmit(new CommandAPDU(Consts.CLA_ED25519, Consts.INS_GET_PRIV, 0, 0));
+        byte[] msg = message(32, 0);
+        byte[] sig = card.sign(msg, true);
 
-        for(int j = 0; j < 10; ++j) {
-            byte[] data = new byte[32];
-            for (int i = 0; i < data.length; ++i)
-                data[i] = (byte) ((0xff & i) + j);
+        assertTrue(Ed25519Card.verify(pub, msg, sig));
+    }
 
-            byte[] signature = sign(cm, data, true, pw);
+    @Test
+    @DisplayName("Offload keygen and non-offload signing interoperate")
+    public void keygenOffload_signNonOffload() throws Exception {
+        Ed25519Card card = card();
+        byte[] pub = card.keygen(true);
 
-            EdDSAParameterSpec spec = EdDSANamedCurveTable.getByName(EdDSANamedCurveTable.ED_25519);
-            Signature sgr = new EdDSAEngine(MessageDigest.getInstance(spec.getHashAlgorithm()));
-            PublicKey pubKey = new EdDSAPublicKey(new EdDSAPublicKeySpec(pubkeyBytes, spec));
-            sgr.initVerify(pubKey);
-            sgr.update(data);
-            Assert.assertTrue(sgr.verify(signature));
-            pw.flush();
+        byte[] msg = message(48, 7);
+        byte[] sig = card.sign(msg, false);
+
+        assertTrue(Ed25519Card.verify(pub, msg, sig));
+    }
+
+    @Test
+    @DisplayName("Empty message can be signed and verified")
+    public void signEmptyMessage() throws Exception {
+        Ed25519Card card = card();
+        byte[] pub = card.keygen(false);
+
+        byte[] sig = card.sign(new byte[0], false);
+
+        assertTrue(Ed25519Card.verify(pub, new byte[0], sig));
+    }
+
+    @Test
+    @DisplayName("Message longer than one APDU is signed via INS_SIGN_UPDATE")
+    public void signChunkedMessage() throws Exception {
+        Ed25519Card card = card();
+        byte[] pub = card.keygen(false);
+
+        byte[] msg = message(200, 3);
+        byte[] sig = card.signChunked(msg, false, 64);
+
+        assertTrue(Ed25519Card.verify(pub, msg, sig));
+    }
+
+    @Test
+    @DisplayName("Chunked and single-shot signing produce equally valid signatures")
+    public void chunkedMatchesSingleShot() throws Exception {
+        Ed25519Card card = card();
+        byte[] pub = card.keygen(true);
+
+        byte[] msg = message(100, 9);
+        byte[] chunked = card.signChunked(msg, true, 30);
+        byte[] single = card.sign(msg, true);
+
+        assertTrue(Ed25519Card.verify(pub, msg, chunked));
+        assertTrue(Ed25519Card.verify(pub, msg, single));
+    }
+
+    @Test
+    @DisplayName("Repeated signatures use a fresh random nonce and all verify")
+    public void repeatedSignaturesUseFreshNonce() throws Exception {
+        Ed25519Card card = card();
+        byte[] pub = card.keygen(false);
+
+        byte[] msg = message(32, 1);
+        byte[] sig1 = card.sign(msg, false);
+        byte[] sig2 = card.sign(msg, false);
+
+        assertTrue(Ed25519Card.verify(pub, msg, sig1));
+        assertTrue(Ed25519Card.verify(pub, msg, sig2));
+        // Same message, but a random nonce means R (and therefore the signature) differs.
+        assertNotEquals(toHex(sig1), toHex(sig2), "signatures of the same message must not be identical");
+    }
+
+    @Test
+    @DisplayName("Signature does not verify against a different message")
+    public void signatureRejectsWrongMessage() throws Exception {
+        Ed25519Card card = card();
+        byte[] pub = card.keygen(false);
+
+        byte[] msg = message(32, 0);
+        byte[] sig = card.sign(msg, false);
+
+        byte[] tampered = msg.clone();
+        tampered[0] ^= 0x01;
+        assertFalse(Ed25519Card.verify(pub, tampered, sig));
+    }
+
+    // ------------------------------------------------------------------
+    // Helpers
+    // ------------------------------------------------------------------
+
+    private static byte[] message(int len, int seed) {
+        byte[] data = new byte[len];
+        for (int i = 0; i < len; ++i) {
+            data[i] = (byte) ((0xff & i) + seed);
         }
+        return data;
+    }
+
+    private static String toHex(byte[] data) {
+        StringBuilder sb = new StringBuilder(data.length * 2);
+        for (byte b : data) {
+            sb.append(Character.forDigit((b >> 4) & 0xf, 16));
+            sb.append(Character.forDigit(b & 0xf, 16));
+        }
+        return sb.toString();
     }
 }
