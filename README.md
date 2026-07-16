@@ -16,7 +16,7 @@ This implementation is only suited for proof-of-concept purposes and **NOT for p
 ```bash
 git clone --recursive https://github.com/dufkan/JCEd25519
 ```
-- Configure your card type in `JCEd25519.java` file (currently are supported only [SIMULATOR](https://github.com/licel/jcardsim), J3R180, J2E145G)
+- Configure your card type in `JCEd25519.java` file.
 
 - Build the applet
 
@@ -24,10 +24,16 @@ git clone --recursive https://github.com/dufkan/JCEd25519
 ./gradlew buildJavaCard  --info --rerun-tasks
 ```
 
-- Send initialize APDU `00DF000000` to the card. For example, using GlobalPlatform Pro
+- Install the applet on a supported smartcard
 
 ```bash
-gp --apdu 00A404000C6A6365643235353139617070 --apdu 00DF000000 -d
+./gradlew installJavaCard
+```
+
+- Run tests
+
+```bash
+./gradlew test --rerun-tasks
 ```
 
 ## Details
@@ -36,4 +42,4 @@ The optimizations in the implementation require the nonce to be generated random
 
 ## Supported Cards
 
-The implementation was tested on NXP J3R200, NXP J3H145, NXP J2E145G, and Infineon Secora ID S.
+The implementation was tested on NXP J3R180, NXP J3H145, NXP J2E145G, and Infineon Secora ID S.
